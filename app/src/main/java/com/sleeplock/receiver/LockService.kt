@@ -80,11 +80,5 @@ class LockService : DeviceAdminReceiver() {
     override fun onDisabled(context: Context, intent: Intent) {
         super.onDisabled(context, intent)
         Log.w(TAG, "设备管理员权限已禁用 - 用户可能尝试卸载")
-        // TODO: 记录违规日志
-    }
-
-    override fun onPasswordChanged(context: Context, intent: Intent, type: Int) {
-        super.onPasswordChanged(context, intent, type)
-        Log.d(TAG, "密码已更改")
     }
 }
