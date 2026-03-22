@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">专注锁机</string>
+    <string name="accessibility_service_label">专注锁机监控服务</string>
+    <string name="accessibility_service_description">用于监控前台应用，在锁机时段拦截非白名单应用，防止您使用娱乐应用。</string>
+</resources>
