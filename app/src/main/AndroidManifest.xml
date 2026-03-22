@@ -49,7 +49,7 @@
     <application
         android:name=".SleepLockApp"
         android:allowBackup="true"
-        android:icon="@mipmap/ic_launcher"
+        android:icon="@android:drawable/ic_lock_lock"
         android:label="@string/app_name"
         android:theme="@style/Theme.SleepLock"
         android:supportsRtl="true">
