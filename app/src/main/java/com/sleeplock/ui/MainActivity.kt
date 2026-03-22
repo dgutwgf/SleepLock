@@ -1,111 +1,57 @@
 package com.sleeplock.ui
 
+import android.app.Activity
 import android.os.Bundle
-import androidx.activity.ComponentActivity
-import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
-import com.sleeplock.ui.theme.SleepLockTheme
+import android.widget.TextView
+import android.graphics.Color
+import android.view.Gravity
+import android.widget.LinearLayout
+import android.view.ViewGroup
 
 /**
- * 主界面
- * 
- * TODO: 实现完整 UI
- * - 锁屏时间设置
- * - 解锁时间设置
- * - 白名单管理
- * - 睡眠统计
+ * 主界面 - 最简版本（不使用 Compose）
  */
-class MainActivity : ComponentActivity() {
+class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent {
-            SleepLockTheme {
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
-                ) {
-                    MainScreen()
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun MainScreen() {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Text(
-            text = "专注锁机 v0.1.0",
-            style = MaterialTheme.typography.headlineMedium
-        )
         
-        Spacer(modifier = Modifier.height(32.dp))
+        // 创建布局
+        val layout = LinearLayout(this)
+        layout.orientation = LinearLayout.VERTICAL
+        layout.gravity = Gravity.CENTER
+        layout.setPadding(50, 50, 50, 50)
+        layout.setBackgroundColor(Color.WHITE)
         
-        Text(
-            text = "⚠️ 开发中版本",
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.error
-        )
+        // 标题
+        val title = TextView(this)
+        title.text = "专注锁机 v0.1.0"
+        title.textSize = 24f
+        title.setTextColor(Color.BLACK)
+        layout.addView(title, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT
+        ))
         
-        Spacer(modifier = Modifier.height(16.dp))
+        // 副标题
+        val subtitle = TextView(this)
+        subtitle.text = "安装成功！"
+        subtitle.textSize = 18f
+        subtitle.setTextColor(Color.BLUE)
+        layout.addView(subtitle, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT
+        ))
         
-        Text(
-            text = "当前版本仅用于测试编译和安装\n核心功能尚未实现",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        // 提示
+        val hint = TextView(this)
+        hint.text = "APK 文件正常，可以安装"
+        hint.textSize = 16f
+        hint.setTextColor(Color.GRAY)
+        layout.addView(hint, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT
+        ))
         
-        Spacer(modifier = Modifier.height(32.dp))
-        
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-        ) {
-            Column(
-                modifier = Modifier.padding(16.dp)
-            ) {
-                Text(
-                    text = "📋 已实现功能",
-                    style = MaterialTheme.typography.titleMedium
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(text = "✅ 项目框架")
-                Text(text = "✅ 设备管理员")
-                Text(text = "✅ 无障碍服务")
-                Text(text = "✅ 开机启动")
-            }
-        }
-        
-        Spacer(modifier = Modifier.height(16.dp))
-        
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-        ) {
-            Column(
-                modifier = Modifier.padding(16.dp)
-            ) {
-                Text(
-                    text = "⏳ 待实现功能",
-                    style = MaterialTheme.typography.titleMedium
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(text = "⏳ 锁屏/解锁逻辑")
-                Text(text = "⏳ 应用白名单管理")
-                Text(text = "⏳ 睡眠监测")
-                Text(text = "⏳ 设置界面")
-            }
-        }
+        setContentView(layout)
     }
 }
