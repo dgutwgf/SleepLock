@@ -38,18 +38,13 @@ class LockService : DeviceAdminReceiver() {
         Log.d(TAG, "执行锁屏")
         
         val devicePolicyManager = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
-        val componentName = ComponentName(context, this)
+        val componentName = ComponentName(context, LockService::class.java)
         
         if (devicePolicyManager.isAdminActive(componentName)) {
             devicePolicyManager.lockNow()
             Log.d(TAG, "锁屏成功")
-            
-            // 启动监控服务
-            // val monitorIntent = Intent(context, MonitorService::class.java)
-            // context.startForegroundService(monitorIntent)
         } else {
             Log.w(TAG, "设备管理员权限未激活")
-            // 请求权限
             requestAdminPermission(context)
         }
     }
@@ -67,7 +62,7 @@ class LockService : DeviceAdminReceiver() {
      */
     private fun requestAdminPermission(context: Context) {
         val devicePolicyManager = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
-        val componentName = ComponentName(context, this)
+        val componentName = ComponentName(context, LockService::class.java)
         
         val intent = Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN).apply {
             putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, componentName)
