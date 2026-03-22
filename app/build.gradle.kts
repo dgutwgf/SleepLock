@@ -32,7 +32,7 @@ android {
         }
         debug {
             isMinifyEnabled = false
-            applicationIdSuffix = ".debug"
+            applicationIdSuffix = ""  // 移除 .debug 后缀，避免签名问题
             versionNameSuffix = "-debug"
         }
     }
