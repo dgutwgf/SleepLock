@@ -36,6 +36,9 @@ class MainActivity : Activity() {
     private lateinit var startButton: Button
     private lateinit var stopButton: Button
     
+    @Volatile
+    private var isLockServiceRunning: Boolean = false
+    
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Log.d(TAG, "MainActivity 已创建")
@@ -74,12 +77,19 @@ class MainActivity : Activity() {
             adminButton.isEnabled = false
             adminButton.text = "已激活"
             startButton.isEnabled = true
+            startButton.alpha = 1.0f
+            stopButton.isEnabled = false
+            stopButton.alpha = 0.5f
+            isLockServiceRunning = false
         } else {
             Log.w(TAG, "设备管理员权限被拒绝")
             updateStatusText("❌ 需要设备管理员权限", ContextCompat.getColor(this, android.R.color.holo_red_dark))
             adminButton.isEnabled = true
             adminButton.text = "激活设备管理员"
             startButton.isEnabled = false
+            startButton.alpha = 0.5f
+            stopButton.isEnabled = false
+            stopButton.alpha = 0.5f
         }
     }
     
@@ -365,23 +375,61 @@ class MainActivity : Activity() {
             return
         }
         
-        // 设置定时任务
-        val schedulerManager = SchedulerManager(this)
-        schedulerManager.scheduleAllTasks()
+        // 防止重复点击
+        if (isLockServiceRunning) {
+            Toast.makeText(this, "锁机服务已在运行中", Toast.LENGTH_SHORT).show()
+            return
+        }
         
-        updateStatusText("🔒 锁机服务已启动", ContextCompat.getColor(this, android.R.color.holo_green_dark))
-        Toast.makeText(this, "锁机服务已启动", Toast.LENGTH_SHORT).show()
-        Log.d(TAG, "锁机服务已启动")
+        ioScope.launch {
+            try {
+                // 设置定时任务
+                val schedulerManager = SchedulerManager(this@MainActivity)
+                schedulerManager.scheduleAllTasks()
+                
+                // 立即锁定屏幕
+                LockService.lockScreen(this@MainActivity)
+                
+                isLockServiceRunning = true
+                
+                withContext(Dispatchers.Main) {
+                    updateStatusText("🔒 锁机服务已启动", ContextCompat.getColor(this@MainActivity, android.R.color.holo_green_dark))
+                    startButton.isEnabled = false
+                    startButton.alpha = 0.5f
+                    stopButton.isEnabled = true
+                    stopButton.alpha = 1.0f
+                    Toast.makeText(this@MainActivity, "锁机服务已启动，屏幕即将锁定", Toast.LENGTH_LONG).show()
+                }
+                
+                Log.d(TAG, "锁机服务已启动")
+            } catch (e: Exception) {
+                Log.e(TAG, "启动锁机服务失败", e)
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(this@MainActivity, "启动失败：${e.message}", Toast.LENGTH_LONG).show()
+                }
+            }
+        }
     }
     
     /**
      * 停止锁机服务
      */
     private fun stopLockService() {
+        if (!isLockServiceRunning) {
+            Toast.makeText(this, "锁机服务未运行", Toast.LENGTH_SHORT).show()
+            return
+        }
+        
         val schedulerManager = SchedulerManager(this)
         schedulerManager.cancelAllTasks()
         
-        updateStatusText("✅ 设备管理员已激活", ContextCompat.getColor(this, android.R.color.holo_green_dark))
+        isLockServiceRunning = false
+        
+        updateStatusText("✅ 锁机服务已停止", ContextCompat.getColor(this, android.R.color.holo_blue_dark))
+        startButton.isEnabled = true
+        startButton.alpha = 1.0f
+        stopButton.isEnabled = false
+        stopButton.alpha = 0.5f
         Toast.makeText(this, "锁机服务已停止", Toast.LENGTH_SHORT).show()
         Log.d(TAG, "锁机服务已停止")
     }
