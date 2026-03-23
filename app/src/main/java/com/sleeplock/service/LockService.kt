@@ -30,12 +30,29 @@ class LockService : DeviceAdminReceiver() {
         /**
          * 请求设备管理员权限
          */
-        fun requestAdminPermission(context: Context) {
-            val intent = Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN)
-            intent.putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, getComponentName(context))
-            intent.putExtra(DevicePolicyManager.EXTRA_ADD_EXPLANATION, "需要设备管理员权限来实现锁屏功能")
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            context.startActivity(intent)
+        fun requestAdminPermission(context: Context, requestCode: Int = 1001) {
+            try {
+                val intent = Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN)
+                intent.putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, getComponentName(context))
+                intent.putExtra(DevicePolicyManager.EXTRA_ADD_EXPLANATION, 
+                    "专注锁机需要设备管理员权限来实现以下功能：\n\n" +
+                    "• 定时锁定屏幕，防止熬夜玩手机\n" +
+                    "• 定时自动解锁，早上正常使用\n" +
+                    "• 保护设置不被恶意修改\n\n" +
+                    "撤销权限后应用将无法锁机。")
+                
+                // 如果 context 是 Activity，使用 startActivityForResult
+                if (context is Activity) {
+                    context.startActivityForResult(intent, requestCode)
+                } else {
+                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    context.startActivity(intent)
+                }
+                Log.d(TAG, "已启动设备管理员授权页面")
+            } catch (e: Exception) {
+                Log.e(TAG, "启动设备管理员授权页面失败", e)
+                Toast.makeText(context, "无法打开授权页面，请手动到设置中授予设备管理员权限", Toast.LENGTH_LONG).show()
+            }
         }
         
         /**

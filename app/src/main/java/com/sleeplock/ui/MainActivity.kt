@@ -8,6 +8,7 @@ import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.widget.*
+import android.widget.Toast
 import androidx.core.content.ContextCompat
 import com.sleeplock.R
 import com.sleeplock.data.SleepLockDatabase
@@ -25,9 +26,11 @@ class MainActivity : Activity() {
     companion object {
         private const val TAG = "MainActivity"
         private const val REQUEST_ADMIN = 1001
+        private const val STATUS_TEXT_ID = 10001
     }
     
     private val ioScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private lateinit var statusTextView: TextView
     
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -78,19 +81,21 @@ class MainActivity : Activity() {
         layout.addView(title)
         
         // 状态文本
-        val statusText = TextView(this).apply {
-            id = View.generateViewId()
+        statusTextView = TextView(this).apply {
+            id = STATUS_TEXT_ID
             textSize = 18f
             gravity = Gravity.CENTER
             setPadding(0, 0, 0, 20)
+            text = "⚠️ 检查设备管理员权限中..."
         }
-        layout.addView(statusText)
+        layout.addView(statusTextView)
         
         // 设备管理员按钮
         val adminButton = Button(this).apply {
             text = "激活设备管理员"
             setOnClickListener {
-                LockService.requestAdminPermission(this@MainActivity)
+                Log.d(TAG, "点击设备管理员按钮")
+                LockService.requestAdminPermission(this@MainActivity, REQUEST_ADMIN)
             }
         }
         layout.addView(adminButton, LinearLayout.LayoutParams(
@@ -189,8 +194,9 @@ class MainActivity : Activity() {
      * 更新状态文本
      */
     private fun updateStatusText(status: String) {
-        val statusText = findViewById<TextView>(View.generateViewId())
-        // 简单处理：实际应该通过 ID 查找
+        runOnUiThread {
+            statusTextView.text = status
+        }
     }
     
     /**
