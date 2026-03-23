@@ -1,11 +1,13 @@
 package com.sleeplock.service
 
+import android.app.Activity
 import android.app.admin.DeviceAdminReceiver
 import android.app.admin.DevicePolicyManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.util.Log
+import android.widget.Toast
 
 /**
  * 设备管理员服务 - 实现锁屏/解锁功能
