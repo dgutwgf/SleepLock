@@ -1,13 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <style name="Theme.SleepLock" parent="android:Theme.Material.Light.NoActionBar">
-        <item name="android:statusBarColor">@android:color/holo_blue_dark</item>
-        <item name="android:navigationBarColor">@android:color/holo_blue_dark</item>
+        <item name="android:statusBarColor">@android:color/white</item>
+        <item name="android:navigationBarColor">@android:color/white</item>
     </style>
     
     <style name="Theme.SleepLock.Fullscreen" parent="Theme.SleepLock">
         <item name="android:windowFullscreen">true</item>
         <item name="android:windowContentOverlay">@null</item>
-        <item name="android:windowNoTitle">true</item>
     </style>
 </resources>

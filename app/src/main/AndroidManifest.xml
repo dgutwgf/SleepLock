@@ -71,7 +71,7 @@
 
         <!-- 设备管理员接收器 -->
         <receiver
-            android:name=".receiver.LockService"
+            android:name=".service.LockService"
             android:permission="android.permission.BIND_DEVICE_ADMIN"
             android:exported="false">
             <meta-data
