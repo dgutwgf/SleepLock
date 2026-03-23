@@ -7,4 +7,6 @@
     <string name="notification_channel_lock_status">锁机状态</string>
     <string name="notification_channel_reminder">睡前提醒</string>
     <string name="notification_channel_emergency">紧急通知</string>
+    <string name="settings_title">设置</string>
+    <string name="whitelist_title">应用白名单</string>
 </resources>

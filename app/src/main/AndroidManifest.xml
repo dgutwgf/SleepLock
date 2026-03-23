@@ -69,6 +69,12 @@
             android:exported="false"
             android:theme="@style/Theme.SleepLock.Fullscreen" />
 
+        <!-- 设置 Activity -->
+        <activity
+            android:name=".ui.SettingsActivity"
+            android:exported="false"
+            android:label="设置" />
+
         <!-- 设备管理员接收器 -->
         <receiver
             android:name=".service.LockService"
@@ -124,6 +130,24 @@
                 <action android:name="android.intent.action.SCREEN_ON" />
                 <action android:name="android.intent.action.SCREEN_OFF" />
                 <action android:name="android.intent.action.USER_PRESENT" />
+            </intent-filter>
+        </receiver>
+
+        <!-- 电话状态接收器 -->
+        <receiver
+            android:name=".receiver.PhoneReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.PHONE_STATE" />
+            </intent-filter>
+        </receiver>
+
+        <!-- 提醒稍后接收器 -->
+        <receiver
+            android:name=".receiver.ReminderSnoozeReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.sleeplock.action.SNOOZE" />
             </intent-filter>
         </receiver>
 

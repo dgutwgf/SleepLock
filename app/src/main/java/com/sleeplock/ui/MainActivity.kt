@@ -228,13 +228,35 @@ class MainActivity : Activity() {
             })
         }
         
+        // 设置按钮
+        val settingsButton = Button(this).apply {
+            text = "⚙️ 设置"
+            textSize = 16f
+            setTextColor(ContextCompat.getColor(this@MainActivity, android.R.color.white))
+            setBackgroundColor(ContextCompat.getColor(this@MainActivity, android.R.color.darker_gray))
+            gravity = Gravity.CENTER
+            setPadding(30, 15, 30, 15)
+            elevation = 2f
+            setOnClickListener {
+                val intent = Intent(this@MainActivity, SettingsActivity::class.java)
+                startActivity(intent)
+            }
+        }
+        layout.addView(settingsButton, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply {
+            topMargin = 30
+            bottomMargin = 20
+        })
+        
         // 版本信息
         val versionText = TextView(this).apply {
-            text = "\n版本 v0.1.0 | 目标设备：Redmi K70 Pro"
+            text = "版本 v0.2.0 | 目标设备：Redmi K70 Pro"
             textSize = 12f
             setTextColor(ContextCompat.getColor(this@MainActivity, android.R.color.darker_gray))
             gravity = Gravity.CENTER
-            setPadding(0, 40, 0, 20)
+            setPadding(0, 20, 0, 20)
             alpha = 0.6f
         }
         layout.addView(versionText)
