@@ -55,7 +55,7 @@ class SettingsActivity : Activity() {
     private fun createLayout(): ScrollView {
         val scrollView = ScrollView(this)
         scrollView.setBackgroundColor(ContextCompat.getColor(this, android.R.color.background_light))
-        scrollView.fillViewport = true
+        scrollView.isFillViewport = true
         
         val layout = LinearLayout(this)
         layout.orientation = LinearLayout.VERTICAL

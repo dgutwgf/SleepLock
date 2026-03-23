@@ -11,6 +11,7 @@ import androidx.work.Worker
 import androidx.work.WorkerParameters
 import com.sleeplock.R
 import com.sleeplock.ui.MainActivity
+import com.sleeplock.receiver.ReminderSnoozeReceiver
 
 /**
  * 睡前提醒 Worker - 使用 WorkManager 定时触发睡前提醒
