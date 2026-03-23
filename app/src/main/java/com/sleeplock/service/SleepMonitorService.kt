@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import com.sleeplock.data.SleepLockDatabase
 import com.sleeplock.data.entity.SleepRecord
+import com.sleeplock.util.UnlockCreditManager
 import kotlinx.coroutines.*
 import java.text.SimpleDateFormat
 import java.util.*
@@ -43,6 +44,9 @@ object SleepMonitorService {
                 isSleeping = true
                 sleepStartTime = System.currentTimeMillis()
                 Log.d(TAG, "判定为入睡：${formatTime(sleepStartTime)}")
+                
+                // 检查是否提前睡觉，计算额度奖励
+                checkEarlySleepAndAddCredits(context, sleepStartTime)
             }
         }
     }
@@ -64,6 +68,53 @@ object SleepMonitorService {
             
             isSleeping = false
             sleepStartTime = 0
+        }
+    }
+    
+    /**
+     * 检查是否提前睡觉并添加额度
+     */
+    private suspend fun checkEarlySleepAndAddCredits(context: Context, sleepTime: Long) {
+        try {
+            val db = SleepLockDatabase.getDatabase(context)
+            val settings = db.userSettingsDao().getSettings() ?: return
+            
+            // 计算规定锁屏时间
+            val lockTimeParts = settings.lockTime.split(":")
+            val lockHour = lockTimeParts[0].toInt()
+            val lockMinute = lockTimeParts[1].toInt()
+            
+            val calendar = Calendar.getInstance().apply {
+                timeInMillis = sleepTime
+            }
+            
+            val scheduledLockTime = Calendar.getInstance().apply {
+                set(Calendar.HOUR_OF_DAY, lockHour)
+                set(Calendar.MINUTE, lockMinute)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+                
+                // 如果锁屏时间已过（跨夜），设置为前一天
+                if (after(calendar)) {
+                    add(Calendar.DAY_OF_YEAR, -1)
+                }
+            }
+            
+            // 计算提前时间（分钟）
+            val earlyMinutes = (scheduledLockTime.timeInMillis - sleepTime) / 60000
+            
+            if (earlyMinutes > 0) {
+                Log.d(TAG, "提前睡觉：$earlyMinutes 分钟")
+                
+                // 添加额度
+                val creditManager = UnlockCreditManager(context)
+                creditManager.addCredits(earlyMinutes.toInt())
+            } else {
+                Log.d(TAG, "未提前睡觉")
+            }
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "检查提前睡觉失败", e)
         }
     }
     

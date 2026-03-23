@@ -148,9 +148,40 @@ class SettingsActivity : Activity() {
         })
         layout.addView(emergencyLayout, createFullWidthParams())
         
+        // 额度显示
+        layout.addView(createSectionTitle("💰 解锁额度"))
+        val creditBalanceText = TextView(this).apply {
+            id = View.generateViewId()
+            text = "查询中..."
+            textSize = 24f
+            setTextColor(ContextCompat.getColor(this@SettingsActivity, android.R.color.holo_blue_dark))
+            gravity = Gravity.CENTER
+            setTypeface(null, android.graphics.Typeface.BOLD)
+            setPadding(0, 10, 0, 10)
+        }
+        layout.addView(creditBalanceText, createFullWidthParams())
+        
+        // 查询并显示额度
+        ioScope.launch {
+            try {
+                val creditManager = com.sleeplock.util.UnlockCreditManager(this@SettingsActivity)
+                val balance = creditManager.getCurrentBalance()
+                withContext(Dispatchers.Main) {
+                    creditBalanceText.text = "$balance 分钟"
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    creditBalanceText.text = "0 分钟"
+                }
+            }
+        }
+        
         // 说明文字
         layout.addView(TextView(this).apply {
-            text = "💡 连续重启 3 次可临时解锁 15 分钟（消耗提前睡觉积累的额度）"
+            text = """💡 连续重启 3 次可临时解锁 15 分钟（消耗所有累计额度）
+💤 提前 30 分钟睡觉 = +15 分钟额度
+⏰ 每天最多解锁 2 次
+📅 额度 7 天过期""".trimIndent()
             textSize = 13f
             setTextColor(ContextCompat.getColor(this@SettingsActivity, android.R.color.darker_gray))
             setPadding(0, 20, 0, 0)
