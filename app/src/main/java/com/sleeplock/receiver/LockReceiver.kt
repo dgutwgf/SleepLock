@@ -35,17 +35,37 @@ class LockReceiver : BroadcastReceiver() {
     private fun handleLock(context: Context) {
         Log.d(TAG, "执行锁屏")
         
+        // 检查设备管理员权限
+        if (!LockService.isAdminActive(context)) {
+            Log.e(TAG, "设备管理员权限未激活，无法锁屏")
+            android.widget.Toast.makeText(context, "请先激活设备管理员权限", android.widget.Toast.LENGTH_LONG).show()
+            return
+        }
+        
         // 锁定屏幕
-        LockService.lockScreen(context)
+        val success = LockService.lockScreen(context)
+        if (success) {
+            Log.d(TAG, "锁屏成功")
+        } else {
+            Log.w(TAG, "锁屏可能失败，用户需要手动确认")
+        }
         
         // 启动监控服务
-        val monitorIntent = Intent(context, MonitorService::class.java)
-        context.startForegroundService(monitorIntent)
+        try {
+            val monitorIntent = Intent(context, MonitorService::class.java)
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                context.startForegroundService(monitorIntent)
+            } else {
+                context.startService(monitorIntent)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "启动监控服务失败", e)
+        }
         
         // 更新无障碍服务的锁机时段
         MonitorAccessibilityService.getInstance()?.setLockPeriod(true)
         
-        Log.d(TAG, "锁屏完成")
+        Log.d(TAG, "锁屏处理完成")
     }
     
     /**

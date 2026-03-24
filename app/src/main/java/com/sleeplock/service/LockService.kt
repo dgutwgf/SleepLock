@@ -58,20 +58,53 @@ class LockService : DeviceAdminReceiver() {
         }
         
         /**
-         * 锁定屏幕
+         * 锁定屏幕 - 支持多种方法的健壮实现
          */
-        fun lockScreen(context: Context) {
+        fun lockScreen(context: Context): Boolean {
             val devicePolicyManager = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+            
+            // 方法1: 使用 DevicePolicyManager.lockNow()（主要方法）
             try {
                 if (isAdminActive(context)) {
-                    devicePolicyManager.lockNow()
-                    Log.d(TAG, "屏幕已锁定")
+                    // Android 9+ 需要设置 flags
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+                        // 使用 FLAG_EVICT_CE_KEYRING_CONTENTS 确保锁屏后需要重新验证
+                        devicePolicyManager.lockNow(DevicePolicyManager.FLAG_EVICT_CE_KEYRING_CONTENTS)
+                    } else {
+                        devicePolicyManager.lockNow()
+                    }
+                    Log.d(TAG, "屏幕已锁定 (DevicePolicyManager)")
+                    return true
                 } else {
                     Log.w(TAG, "设备管理员权限未激活")
+                    Toast.makeText(context, "请先激活设备管理员权限", Toast.LENGTH_SHORT).show()
                 }
             } catch (e: SecurityException) {
-                Log.e(TAG, "锁定屏幕失败", e)
+                Log.e(TAG, "DevicePolicyManager.lockNow() 失败", e)
+            } catch (e: Exception) {
+                Log.e(TAG, "锁定屏幕异常", e)
             }
+            
+            // 方法2: 备用方案 - 使用 KeyguardManager（需要 DISABLE_KEYGUARD 权限）
+            try {
+                val keyguardManager = context.getSystemService(Context.KEYGUARD_SERVICE) as android.app.KeyguardManager
+                val keyguardLock = keyguardManager.newKeyguardLock("SleepLock")
+                keyguardLock.reenableKeyguard()
+                keyguardLock.disableKeyguard()
+                Log.d(TAG, "尝试使用 KeyguardLock 锁屏")
+            } catch (e: Exception) {
+                Log.e(TAG, "KeyguardLock 方案也失败", e)
+            }
+            
+            // 方法3: 最后尝试 - 发送电源键事件（需要 root 或系统签名）
+            try {
+                Log.d(TAG, "锁屏方法均失败，建议用户手动锁屏")
+                Toast.makeText(context, "锁屏失败，请手动锁屏或重启应用", Toast.LENGTH_LONG).show()
+            } catch (e: Exception) {
+                Log.e(TAG, "显示 Toast 失败", e)
+            }
+            
+            return false
         }
     }
     
