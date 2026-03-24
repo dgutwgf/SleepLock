@@ -66,11 +66,13 @@ class LockService : DeviceAdminReceiver() {
             // 方法1: 使用 DevicePolicyManager.lockNow()（主要方法）
             try {
                 if (isAdminActive(context)) {
-                    // Android 9+ 需要设置 flags
+                    // Android 9+ 可以使用 flags 参数
+                    // FLAG_EVICT_CE_KEYRING_CONTENTS = 1 (确保锁屏后需要重新验证)
                     if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
-                        // 使用 FLAG_EVICT_CE_KEYRING_CONTENTS 确保锁屏后需要重新验证
-                        devicePolicyManager.lockNow(DevicePolicyManager.FLAG_EVICT_CE_KEYRING_CONTENTS)
+                        @Suppress("DEPRECATION")
+                        devicePolicyManager.lockNow(1) // FLAG_EVICT_CE_KEYRING_CONTENTS
                     } else {
+                        @Suppress("DEPRECATION")
                         devicePolicyManager.lockNow()
                     }
                     Log.d(TAG, "屏幕已锁定 (DevicePolicyManager)")
