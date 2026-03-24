@@ -395,11 +395,15 @@ class MainActivity : Activity() {
             return
         }
         
-        // 保存锁机状态
+        // 保存锁机状态和开始时间
         getSharedPreferences("SleepLock", Context.MODE_PRIVATE)
             .edit()
             .putBoolean("is_lock_active", true)
+            .putBoolean("test_mode", true)  // 测试模式：2分钟
+            .putLong("lock_start_time", System.currentTimeMillis())
             .apply()
+        
+        Toast.makeText(this, "测试模式：锁屏持续2分钟", Toast.LENGTH_SHORT).show()
         
         ioScope.launch {
             try {
@@ -414,8 +418,7 @@ class MainActivity : Activity() {
                     isLockServiceRunning = true
                     
                     if (success) {
-                        updateStatusText("🔒 锁机服务已启动", ContextCompat.getColor(this@MainActivity, android.R.color.holo_green_dark))
-                        Toast.makeText(this@MainActivity, "锁机服务已启动", Toast.LENGTH_SHORT).show()
+                        updateStatusText("🔒 锁机中（测试2分钟）", ContextCompat.getColor(this@MainActivity, android.R.color.holo_green_dark))
                     } else {
                         updateStatusText("⚠️ 锁机服务启动中", ContextCompat.getColor(this@MainActivity, android.R.color.holo_orange_dark))
                         Toast.makeText(this@MainActivity, "锁机服务已启动，请手动锁屏确认", Toast.LENGTH_LONG).show()
@@ -427,6 +430,17 @@ class MainActivity : Activity() {
                     stopButton.alpha = 1.0f
                 }
                 
+                // 2分钟后自动停止测试模式
+                withContext(Dispatchers.IO) {
+                    delay(2 * 60 * 1000)
+                }
+                
+                withContext(Dispatchers.Main) {
+                    if (isLockServiceRunning) {
+                        Toast.makeText(this@MainActivity, "2分钟测试结束", Toast.LENGTH_SHORT).show()
+                    }
+                }
+                
                 Log.d(TAG, "锁机服务已启动")
             } catch (e: Exception) {
                 Log.e(TAG, "启动锁机服务失败", e)
@@ -436,6 +450,7 @@ class MainActivity : Activity() {
                     getSharedPreferences("SleepLock", Context.MODE_PRIVATE)
                         .edit()
                         .putBoolean("is_lock_active", false)
+                        .putBoolean("test_mode", false)
                         .apply()
                 }
             }
@@ -494,6 +509,8 @@ class MainActivity : Activity() {
         getSharedPreferences("SleepLock", Context.MODE_PRIVATE)
             .edit()
             .putBoolean("is_lock_active", false)
+            .putBoolean("test_mode", false)
+            .putLong("lock_start_time", 0)
             .apply()
         
         updateStatusText("✅ 锁机服务已停止", ContextCompat.getColor(this, android.R.color.holo_blue_dark))
