@@ -472,18 +472,26 @@ class MainActivity : Activity() {
             return
         }
         
-        Toast.makeText(this, "3秒后将执行锁屏测试...", Toast.LENGTH_SHORT).show()
+        // 设置测试模式并立即锁屏
+        getSharedPreferences("SleepLock", Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean("is_lock_active", true)
+            .putBoolean("test_mode", true)
+            .putLong("lock_start_time", System.currentTimeMillis())
+            .apply()
         
-        // 3秒后执行锁屏测试
-        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-            Log.d(TAG, "执行锁屏测试...")
-            val success = LockService.lockScreen(this)
-            Log.d(TAG, "锁屏测试结果: $success")
-            
-            if (!success) {
-                Toast.makeText(this, "锁屏失败，请查看日志", Toast.LENGTH_LONG).show()
-            }
-        }, 3000)
+        Toast.makeText(this, "测试模式启动：持续锁屏2分钟", Toast.LENGTH_SHORT).show()
+        
+        // 立即锁屏
+        LockService.lockScreen(this)
+        
+        // 更新UI状态
+        isLockServiceRunning = true
+        updateStatusText("🔒 锁机中（测试2分钟）", android.graphics.Color.parseColor("#4CAF50"))
+        startButton.isEnabled = false
+        startButton.alpha = 0.5f
+        stopButton.isEnabled = true
+        stopButton.alpha = 1.0f
     }
     
     /**

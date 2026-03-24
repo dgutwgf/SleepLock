@@ -4,13 +4,15 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import com.sleeplock.service.LockService
 import com.sleeplock.service.SleepMonitorService
-import kotlinx.coroutines.*
+import com.sleeplock.ui.LockScreenActivity
 
 /**
- * 屏幕状态接收器 - 监听息屏/亮屏事件，实现持续锁屏
+ * 屏幕状态接收器 - 监听息屏/亮屏事件，实现强制锁屏
  */
 class ScreenReceiver : BroadcastReceiver() {
     
@@ -18,14 +20,12 @@ class ScreenReceiver : BroadcastReceiver() {
         private const val TAG = "ScreenReceiver"
         private const val PREFS_NAME = "SleepLock"
         private const val KEY_LOCK_ACTIVE = "is_lock_active"
-        private const val KEY_LOCK_TIME = "lock_time"
-        private const val KEY_UNLOCK_TIME = "unlock_time"
         
         // 测试模式：锁屏持续时间（毫秒）
         private const val TEST_LOCK_DURATION = 2 * 60 * 1000L // 2 分钟
     }
     
-    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private val handler = Handler(Looper.getMainLooper())
     
     override fun onReceive(context: Context, intent: Intent) {
         val action = intent.action
@@ -37,22 +37,24 @@ class ScreenReceiver : BroadcastReceiver() {
                 SleepMonitorService.onScreenOff(context)
             }
             Intent.ACTION_USER_PRESENT -> {
-                Log.d(TAG, "用户解锁")
+                Log.d(TAG, "⚠️ 用户解锁 - 立即执行强制锁屏")
                 SleepMonitorService.onUserPresent(context)
                 
-                // 检查是否需要持续锁屏
-                checkAndRelock(context)
+                // 立即执行强制锁屏（无延迟）
+                forceRelock(context)
             }
             Intent.ACTION_SCREEN_ON -> {
                 Log.d(TAG, "屏幕开启")
+                // 屏幕亮起时也检查（防止用户在锁屏界面操作）
+                checkAndShowLockOverlay(context)
             }
         }
     }
     
     /**
-     * 检查是否需要重新锁屏
+     * 强制重新锁屏 - 多重防护
      */
-    private fun checkAndRelock(context: Context) {
+    private fun forceRelock(context: Context) {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val isLockActive = prefs.getBoolean(KEY_LOCK_ACTIVE, false)
         
@@ -63,23 +65,75 @@ class ScreenReceiver : BroadcastReceiver() {
             return
         }
         
-        // 检查当前时间是否在锁机时段
-        if (isInLockPeriod(context, prefs)) {
-            Log.d(TAG, "当前在锁机时段，延迟500ms后重新锁屏")
-            
-            // 延迟一小段时间后重新锁屏，让用户看到解锁的瞬间
-            scope.launch {
-                delay(500)
-                
-                // 再次检查（防止用户手动停止）
-                if (prefs.getBoolean(KEY_LOCK_ACTIVE, false)) {
-                    Log.d(TAG, "执行重新锁屏")
-                    val success = LockService.lockScreen(context)
-                    Log.d(TAG, "重新锁屏结果: $success")
-                }
-            }
-        } else {
+        // 检查是否在锁机时段
+        if (!isInLockPeriod(context, prefs)) {
             Log.d(TAG, "当前不在锁机时段，不重新锁屏")
+            return
+        }
+        
+        Log.d(TAG, "🔒 执行强制锁屏...")
+        
+        // 方法1: 立即启动锁屏 Activity（最快响应用户看到）
+        try {
+            val intent = Intent(context, LockScreenActivity::class.java).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or 
+                         Intent.FLAG_ACTIVITY_CLEAR_TASK or
+                         Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS or
+                         Intent.FLAG_ACTIVITY_NO_ANIMATION)
+            }
+            context.startActivity(intent)
+            Log.d(TAG, "✅ 已启动 LockScreenActivity")
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ 启动 LockScreenActivity 失败", e)
+        }
+        
+        // 方法2: 立即锁屏
+        handler.post {
+            try {
+                val success = LockService.lockScreen(context)
+                Log.d(TAG, "锁屏结果: $success")
+            } catch (e: Exception) {
+                Log.e(TAG, "锁屏失败", e)
+            }
+        }
+        
+        // 方法3: 200ms 后再次检查并锁屏（确保成功）
+        handler.postDelayed({
+            if (prefs.getBoolean(KEY_LOCK_ACTIVE, false) && isInLockPeriod(context, prefs)) {
+                Log.d(TAG, "二次确认锁屏")
+                LockService.lockScreen(context)
+            }
+        }, 200)
+        
+        // 方法4: 500ms 后再次检查
+        handler.postDelayed({
+            if (prefs.getBoolean(KEY_LOCK_ACTIVE, false) && isInLockPeriod(context, prefs)) {
+                Log.d(TAG, "三次确认锁屏")
+                LockService.lockScreen(context)
+            }
+        }, 500)
+    }
+    
+    /**
+     * 检查并显示锁屏覆盖层
+     */
+    private fun checkAndShowLockOverlay(context: Context) {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val isLockActive = prefs.getBoolean(KEY_LOCK_ACTIVE, false)
+        
+        if (isLockActive && isInLockPeriod(context, prefs)) {
+            // 延迟启动覆盖层（给系统时间完成亮屏）
+            handler.postDelayed({
+                try {
+                    val intent = Intent(context, LockScreenActivity::class.java).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or
+                                 Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS)
+                    }
+                    context.startActivity(intent)
+                } catch (e: Exception) {
+                    Log.e(TAG, "启动覆盖层失败", e)
+                }
+            }, 100)
         }
     }
     
@@ -92,13 +146,14 @@ class ScreenReceiver : BroadcastReceiver() {
         if (testMode) {
             val lockStartTime = prefs.getLong("lock_start_time", 0)
             val elapsed = System.currentTimeMillis() - lockStartTime
-            Log.d(TAG, "测试模式: 已过 ${elapsed/1000} 秒，限制 ${TEST_LOCK_DURATION/1000} 秒")
+            val remaining = TEST_LOCK_DURATION - elapsed
+            Log.d(TAG, "测试模式: 已过 ${elapsed/1000}秒, 剩余 ${remaining/1000}秒")
             return elapsed < TEST_LOCK_DURATION
         }
         
         // 正常模式：检查时间段
-        val lockTime = prefs.getString(KEY_LOCK_TIME, "23:40") ?: "23:40"
-        val unlockTime = prefs.getString(KEY_UNLOCK_TIME, "06:00") ?: "06:00"
+        val lockTime = prefs.getString("lock_time", "23:40") ?: "23:40"
+        val unlockTime = prefs.getString("unlock_time", "06:00") ?: "06:00"
         
         return isInTimePeriod(lockTime, unlockTime)
     }
@@ -119,10 +174,8 @@ class ScreenReceiver : BroadcastReceiver() {
             
             // 处理跨夜情况（如 23:40 - 06:00）
             val inPeriod = if (startMinutes > endMinutes) {
-                // 跨夜：当前时间 >= 开始时间 或 当前时间 < 结束时间
                 currentMinutes >= startMinutes || currentMinutes < endMinutes
             } else {
-                // 同一天：开始时间 <= 当前时间 < 结束时间
                 currentMinutes >= startMinutes && currentMinutes < endMinutes
             }
             
