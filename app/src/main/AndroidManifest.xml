@@ -72,6 +72,14 @@
             android:exported="false"
             android:theme="@style/Theme.SleepLock.Fullscreen" />
 
+        <!-- 锁屏 Activity -->
+        <activity
+            android:name=".ui.LockScreenActivity"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:excludeFromRecents="true"
+            android:theme="@style/Theme.SleepLock.Fullscreen" />
+
         <!-- 设置 Activity -->
         <activity
             android:name=".ui.SettingsActivity"

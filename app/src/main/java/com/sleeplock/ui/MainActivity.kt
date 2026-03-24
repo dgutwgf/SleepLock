@@ -189,6 +189,17 @@ class MainActivity : Activity() {
             LinearLayout.LayoutParams.MATCH_PARENT,
             LinearLayout.LayoutParams.WRAP_CONTENT
         ).apply {
+            bottomMargin = 15
+        })
+        
+        // 测试锁屏按钮
+        val testLockButton = createSecondaryButton(this, "🔧 测试锁屏") {
+            testLockScreen()
+        }
+        layout.addView(testLockButton, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply {
             bottomMargin = 40
         })
         
@@ -429,6 +440,35 @@ class MainActivity : Activity() {
                 }
             }
         }
+    }
+    
+    /**
+     * 测试锁屏功能
+     */
+    private fun testLockScreen() {
+        Log.d(TAG, "=== 开始测试锁屏功能 ===")
+        
+        // 检查权限
+        val hasAdmin = LockService.isAdminActive(this)
+        Log.d(TAG, "设备管理员权限: $hasAdmin")
+        
+        if (!hasAdmin) {
+            Toast.makeText(this, "请先激活设备管理员权限", Toast.LENGTH_SHORT).show()
+            return
+        }
+        
+        Toast.makeText(this, "3秒后将执行锁屏测试...", Toast.LENGTH_SHORT).show()
+        
+        // 3秒后执行锁屏测试
+        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+            Log.d(TAG, "执行锁屏测试...")
+            val success = LockService.lockScreen(this)
+            Log.d(TAG, "锁屏测试结果: $success")
+            
+            if (!success) {
+                Toast.makeText(this, "锁屏失败，请查看日志", Toast.LENGTH_LONG).show()
+            }
+        }, 3000)
     }
     
     /**

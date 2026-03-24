@@ -6,6 +6,7 @@ import android.app.admin.DevicePolicyManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.util.Log
 import android.widget.Toast
 
@@ -58,66 +59,114 @@ class LockService : DeviceAdminReceiver() {
         }
         
         /**
-         * 锁定屏幕 - 支持多种方法的健壮实现
+         * 锁定屏幕 - 多种方法尝试
          */
         fun lockScreen(context: Context): Boolean {
-            val devicePolicyManager = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+            Log.d(TAG, "开始执行锁屏...")
             
             // 方法1: 使用 DevicePolicyManager.lockNow()（主要方法）
-            try {
-                if (isAdminActive(context)) {
-                    // Android 9+ 可以使用 flags 参数
-                    // FLAG_EVICT_CE_KEYRING_CONTENTS = 1 (确保锁屏后需要重新验证)
-                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
-                        @Suppress("DEPRECATION")
-                        devicePolicyManager.lockNow(1) // FLAG_EVICT_CE_KEYRING_CONTENTS
-                    } else {
-                        @Suppress("DEPRECATION")
-                        devicePolicyManager.lockNow()
-                    }
-                    Log.d(TAG, "屏幕已锁定 (DevicePolicyManager)")
-                    return true
-                } else {
-                    Log.w(TAG, "设备管理员权限未激活")
-                    Toast.makeText(context, "请先激活设备管理员权限", Toast.LENGTH_SHORT).show()
-                }
-            } catch (e: SecurityException) {
-                Log.e(TAG, "DevicePolicyManager.lockNow() 失败", e)
-            } catch (e: Exception) {
-                Log.e(TAG, "锁定屏幕异常", e)
+            if (lockWithDevicePolicy(context)) {
+                return true
             }
             
-            // 方法2: 备用方案 - 使用 KeyguardManager（需要 DISABLE_KEYGUARD 权限）
-            try {
-                val keyguardManager = context.getSystemService(Context.KEYGUARD_SERVICE) as android.app.KeyguardManager
-                val keyguardLock = keyguardManager.newKeyguardLock("SleepLock")
-                keyguardLock.reenableKeyguard()
-                keyguardLock.disableKeyguard()
-                Log.d(TAG, "尝试使用 KeyguardLock 锁屏")
-            } catch (e: Exception) {
-                Log.e(TAG, "KeyguardLock 方案也失败", e)
+            // 方法2: 使用 AccessibilityService 的全局锁屏动作 (Android 9+)
+            if (lockWithAccessibility(context)) {
+                return true
             }
             
-            // 方法3: 最后尝试 - 发送电源键事件（需要 root 或系统签名）
-            try {
-                Log.d(TAG, "锁屏方法均失败，建议用户手动锁屏")
-                Toast.makeText(context, "锁屏失败，请手动锁屏或重启应用", Toast.LENGTH_LONG).show()
-            } catch (e: Exception) {
-                Log.e(TAG, "显示 Toast 失败", e)
+            // 方法3: 启动锁屏 Activity（备用方案）
+            if (lockWithActivity(context)) {
+                return true
             }
             
+            Log.e(TAG, "所有锁屏方法均失败")
+            Toast.makeText(context, "锁屏失败，请检查设备管理员权限", Toast.LENGTH_LONG).show()
             return false
+        }
+        
+        /**
+         * 方法1: DevicePolicyManager.lockNow()
+         */
+        private fun lockWithDevicePolicy(context: Context): Boolean {
+            return try {
+                if (!isAdminActive(context)) {
+                    Log.w(TAG, "设备管理员权限未激活")
+                    return false
+                }
+                
+                val devicePolicyManager = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+                
+                // 执行锁屏
+                devicePolicyManager.lockNow()
+                
+                Log.d(TAG, "✅ DevicePolicyManager.lockNow() 执行成功")
+                true
+            } catch (e: SecurityException) {
+                Log.e(TAG, "❌ DevicePolicyManager.lockNow() 权限异常", e)
+                false
+            } catch (e: Exception) {
+                Log.e(TAG, "❌ DevicePolicyManager.lockNow() 失败", e)
+                false
+            }
+        }
+        
+        /**
+         * 方法2: AccessibilityService 全局锁屏动作 (Android 9+)
+         */
+        private fun lockWithAccessibility(context: Context): Boolean {
+            return try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    val accessibilityService = MonitorAccessibilityService.getInstance()
+                    if (accessibilityService != null) {
+                        val result = accessibilityService.performGlobalAction(
+                            android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_LOCK_SCREEN
+                        )
+                        if (result) {
+                            Log.d(TAG, "✅ AccessibilityService.GLOBAL_ACTION_LOCK_SCREEN 执行成功")
+                            return true
+                        } else {
+                            Log.w(TAG, "❌ AccessibilityService.GLOBAL_ACTION_LOCK_SCREEN 返回 false")
+                        }
+                    } else {
+                        Log.w(TAG, "AccessibilityService 未运行")
+                    }
+                }
+                false
+            } catch (e: Exception) {
+                Log.e(TAG, "❌ AccessibilityService 锁屏失败", e)
+                false
+            }
+        }
+        
+        /**
+         * 方法3: 启动全屏锁屏 Activity（最后备用方案）
+         */
+        private fun lockWithActivity(context: Context): Boolean {
+            return try {
+                val intent = Intent(context, com.sleeplock.ui.LockScreenActivity::class.java)
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or 
+                               Intent.FLAG_ACTIVITY_CLEAR_TASK or
+                               Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS)
+                context.startActivity(intent)
+                Log.d(TAG, "✅ 启动 LockScreenActivity 作为锁屏界面")
+                true
+            } catch (e: Exception) {
+                Log.e(TAG, "❌ 启动锁屏 Activity 失败", e)
+                false
+            }
         }
     }
     
     override fun onEnabled(context: Context, intent: Intent) {
         super.onEnabled(context, intent)
         Log.d(TAG, "设备管理员权限已启用")
+        Toast.makeText(context, "设备管理员权限已启用", Toast.LENGTH_SHORT).show()
     }
     
     override fun onDisabled(context: Context, intent: Intent) {
         super.onDisabled(context, intent)
         Log.w(TAG, "设备管理员权限已禁用")
+        Toast.makeText(context, "设备管理员权限已禁用，锁机功能将无法使用", Toast.LENGTH_LONG).show()
     }
     
     override fun onPasswordChanged(context: Context, intent: Intent) {
