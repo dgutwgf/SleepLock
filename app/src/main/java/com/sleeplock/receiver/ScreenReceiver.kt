@@ -75,10 +75,12 @@ class ScreenReceiver : BroadcastReceiver() {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val isLockActive = prefs.getBoolean(KEY_LOCK_ACTIVE, false)
         
-        Log.d(TAG, "🔍 检查监控状态：isLockActive=$isLockActive")
+        Log.d(TAG, "🔍 解锁后检查监控状态：isLockActive=$isLockActive")
+        LogManager.screenStatus("ScreenReceiver", "🔍 解锁后检查监控状态：isLockActive=$isLockActive")
         
         if (!isLockActive) {
             Log.d(TAG, "锁机服务未激活，跳过")
+            LogManager.screenStatus("ScreenReceiver", "⏭️ 锁机服务未激活，跳过监控")
             return
         }
         
@@ -86,6 +88,7 @@ class ScreenReceiver : BroadcastReceiver() {
         val accessibilityService = MonitorAccessibilityService.getInstance()
         if (accessibilityService == null) {
             Log.w(TAG, "⚠️ 无障碍服务未运行，尝试恢复")
+            LogManager.screenStatus("ScreenReceiver", "⚠️ 无障碍服务未运行，尝试恢复")
             // 尝试启动监控服务来恢复无障碍服务
             try {
                 val monitorIntent = Intent(context, MonitorService::class.java)
@@ -95,8 +98,10 @@ class ScreenReceiver : BroadcastReceiver() {
                     context.startService(monitorIntent)
                 }
                 Log.d(TAG, "🚀 已尝试启动监控服务")
+                LogManager.screenStatus("ScreenReceiver", "🚀 已尝试启动监控服务")
             } catch (e: Exception) {
                 Log.e(TAG, "启动监控服务失败", e)
+                LogManager.e(ExecutionLog.LogCategory.SERVICE, "ScreenReceiver", "启动监控服务失败：${e.message}")
             }
             return
         }
@@ -104,13 +109,23 @@ class ScreenReceiver : BroadcastReceiver() {
         // 立即更新锁机时段状态（强制刷新）
         scope.launch {
             Log.d(TAG, "🔄 解锁后立即更新锁机时段")
+            LogManager.screenStatus("ScreenReceiver", "🔄 解锁后立即更新锁机时段")
             accessibilityService.updateLockPeriod()
             
             // 确保锁机时段被正确设置
             delay(500)
             accessibilityService.updateLockPeriod()
+            
+            // 强制检查当前应用（如果有的话）
+            val currentPackage = accessibilityService.getCurrentPackageName()
+            if (currentPackage.isNotEmpty()) {
+                Log.d(TAG, "🔍 解锁后强制检查当前应用：$currentPackage")
+                LogManager.screenStatus("ScreenReceiver", "🔍 解锁后强制检查当前应用：$currentPackage")
+                accessibilityService.checkAndIntercept(currentPackage)
+            }
         }
         
         Log.d(TAG, "✅ 监控服务已确认活跃")
+        LogManager.screenStatus("ScreenReceiver", "✅ 监控服务已确认活跃")
     }
 }

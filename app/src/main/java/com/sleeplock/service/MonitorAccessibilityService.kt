@@ -152,11 +152,23 @@ class MonitorAccessibilityService : AccessibilityService() {
      */
     private fun startPeriodicCheck() {
         serviceScope.launch {
+            var checkCount = 0
             while (isActive) {
                 delay(1000) // 每秒检查一次
+                checkCount++
                 
                 // 每次检查前都更新锁机时段（确保状态同步）
                 updateLockPeriod()
+                
+                // 每 10 次检查输出一次详细日志（避免日志过多）
+                if (checkCount % 10 == 0) {
+                    val prefs = getSharedPreferences("SleepLock", Context.MODE_PRIVATE)
+                    val isLockActive = prefs.getBoolean("is_lock_active", false)
+                    val testMode = prefs.getBoolean("test_mode", false)
+                    Log.d(TAG, "📊 定时监控检查 #${checkCount} - 锁机=$isLockPeriod, 激活=$isLockActive, 测试=$testMode")
+                    LogManager.d(ExecutionLog.LogCategory.SERVICE, "PeriodicCheck", 
+                        "📊 定时监控检查 #${checkCount} - 锁机=$isLockPeriod, 激活=$isLockActive, 测试=$testMode")
+                }
                 
                 // 只要当前有应用就检查（不依赖 isLockPeriod，因为 updateLockPeriod 已更新它）
                 checkCurrentApp()
@@ -169,7 +181,7 @@ class MonitorAccessibilityService : AccessibilityService() {
      */
     private suspend fun checkCurrentApp() {
         if (currentPackageName.isNotEmpty() && !isIntercepting && isLockPeriod) {
-            checkAndIntercept(currentPackageName)
+            checkAndInterceptInternal(currentPackageName)
         }
     }
     
@@ -183,12 +195,18 @@ class MonitorAccessibilityService : AccessibilityService() {
                 
                 // 包名变化时立即检查（排除正在拦截的情况）
                 if (packageName != currentPackageName && !isIntercepting) {
+                    val oldPackage = currentPackageName
                     currentPackageName = packageName
+                    
+                    Log.d(TAG, "🔄 窗口变化：$oldPackage → $packageName")
+                    LogManager.d(ExecutionLog.LogCategory.ACCESSIBILITY, "WindowChange", 
+                        "🔄 窗口变化：$oldPackage → $packageName")
                     
                     // 每次窗口变化时都更新锁机时段（确保解锁后立即恢复）
                     serviceScope.launch {
                         updateLockPeriod()
-                        checkAndIntercept(packageName)
+                        Log.d(TAG, "🔍 窗口变化后检查锁机状态：isLockPeriod=$isLockPeriod")
+                        checkAndInterceptInternal(packageName)
                     }
                 }
             }
@@ -209,15 +227,20 @@ class MonitorAccessibilityService : AccessibilityService() {
     /**
      * 检查并拦截应用 - 无冷却时间，实时拦截
      */
-    private suspend fun checkAndIntercept(packageName: String) {
+    private suspend fun checkAndInterceptInternal(packageName: String) {
+        // 详细记录每次检查
+        Log.v(TAG, "🔍 检查应用：$packageName (isLockPeriod=$isLockPeriod)")
+        
         // 检查是否在锁机时段
         if (!isLockPeriod) {
+            Log.v(TAG, "⏭️ 非锁机时段，跳过拦截")
             return
         }
         
         // 检查是否在基础白名单
         if (packageName in baseWhitelist) {
             Log.d(TAG, "✅ 白名单应用：$packageName")
+            LogManager.d(ExecutionLog.LogCategory.INTERCEPT, "AppCheck", "✅ 白名单应用：$packageName")
             return
         }
         
@@ -225,6 +248,7 @@ class MonitorAccessibilityService : AccessibilityService() {
         val isEntertainmentApp = isEntertainmentApp(packageName)
         if (isEntertainmentApp) {
             Log.w(TAG, "🚫 娱乐应用，立即拦截：$packageName")
+            LogManager.intercept("AppIntercept", packageName, "娱乐应用")
             interceptApp(packageName, "娱乐应用")
             return
         }
@@ -236,6 +260,7 @@ class MonitorAccessibilityService : AccessibilityService() {
             
             if (isWhitelisted) {
                 Log.d(TAG, "✅ 用户白名单应用：$packageName")
+                LogManager.d(ExecutionLog.LogCategory.INTERCEPT, "AppCheck", "✅ 用户白名单应用：$packageName")
                 return
             }
         } catch (e: Exception) {
@@ -245,6 +270,7 @@ class MonitorAccessibilityService : AccessibilityService() {
         // 其他应用：根据设置决定是否拦截
         // 默认策略：非白名单应用都拦截
         Log.w(TAG, "⚠️ 非白名单应用，立即拦截：$packageName")
+        LogManager.intercept("AppIntercept", packageName, "非白名单应用")
         interceptApp(packageName, "非白名单应用")
     }
     
@@ -362,6 +388,19 @@ class MonitorAccessibilityService : AccessibilityService() {
     fun setLockPeriod(isLock: Boolean) {
         isLockPeriod = isLock
         Log.d(TAG, "🔐 锁机时段：$isLock (拦截次数：$interceptCount)")
+        LogManager.d(ExecutionLog.LogCategory.SERVICE, "LockPeriod", "🔐 锁机时段：$isLock (拦截次数：$interceptCount)")
+    }
+    
+    /**
+     * 获取当前包名（供 ScreenReceiver 使用）
+     */
+    fun getCurrentPackageName(): String = currentPackageName
+    
+    /**
+     * 公开检查拦截方法（供 ScreenReceiver 使用）
+     */
+    suspend fun checkAndIntercept(packageName: String) {
+        checkAndInterceptInternal(packageName)
     }
     
     /**

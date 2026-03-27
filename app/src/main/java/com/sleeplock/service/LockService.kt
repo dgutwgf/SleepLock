@@ -9,6 +9,8 @@ import android.content.Intent
 import android.os.Build
 import android.util.Log
 import android.widget.Toast
+import com.sleeplock.data.entity.ExecutionLog
+import com.sleeplock.util.LogManager
 
 /**
  * 设备管理员服务 - 实现锁屏/解锁功能
@@ -62,7 +64,8 @@ class LockService : DeviceAdminReceiver() {
          * 锁定屏幕 - 多种方法尝试
          */
         fun lockScreen(context: Context): Boolean {
-            Log.d(TAG, "开始执行锁屏...")
+            Log.d(TAG, "🔒 开始执行锁屏动作...")
+            LogManager.screenStatus("LockService", "🔒 开始执行锁屏动作")
             
             // 方法1: 使用 DevicePolicyManager.lockNow()（主要方法）
             if (lockWithDevicePolicy(context)) {

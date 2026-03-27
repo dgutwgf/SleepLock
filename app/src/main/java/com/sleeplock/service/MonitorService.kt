@@ -12,6 +12,8 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.sleeplock.R
 import com.sleeplock.data.SleepLockDatabase
+import com.sleeplock.data.entity.ExecutionLog
+import com.sleeplock.util.LogManager
 import kotlinx.coroutines.*
 import java.util.Calendar
 
@@ -43,12 +45,14 @@ class MonitorService : Service() {
     override fun onCreate() {
         super.onCreate()
         Log.d(TAG, "🔧 监控服务已创建")
+        LogManager.serviceStatus("MonitorService", "🔧 监控服务已创建")
         prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         createNotificationChannel()
     }
     
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        Log.d(TAG, "🚀 监控服务已启动")
+        Log.d(TAG, "🚀 监控服务已启动 - 前台服务")
+        LogManager.serviceStatus("MonitorService", "🚀 监控服务已启动 - 前台服务")
         
         // 启动前台服务
         val notification = createNotification()
@@ -69,7 +73,25 @@ class MonitorService : Service() {
         super.onDestroy()
         serviceScope.cancel()
         mainHandler.removeCallbacksAndMessages(null)
-        Log.d(TAG, "监控服务已销毁")
+        Log.w(TAG, "⚠️ 监控服务已销毁 - 可能被系统杀死")
+        LogManager.e(ExecutionLog.LogCategory.SERVICE, "MonitorService", "⚠️ 监控服务已销毁 - 可能被系统杀死")
+    }
+    
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        super.onTaskRemoved(rootIntent)
+        Log.w(TAG, "⚠️ 监控服务被后台挂起 - 任务移除")
+        LogManager.e(ExecutionLog.LogCategory.SERVICE, "MonitorService", "⚠️ 监控服务被后台挂起 - 任务移除")
+        
+        // 尝试重启服务
+        try {
+            val restartIntent = Intent(applicationContext, this::class.java)
+            startForegroundService(restartIntent)
+            Log.d(TAG, "🔄 尝试重启监控服务")
+            LogManager.serviceStatus("MonitorService", "🔄 监控服务被挂起后尝试重启")
+        } catch (e: Exception) {
+            Log.e(TAG, "重启监控服务失败", e)
+            LogManager.e(ExecutionLog.LogCategory.SERVICE, "MonitorService", "重启监控服务失败：${e.message}")
+        }
     }
     
     /**
@@ -123,7 +145,7 @@ class MonitorService : Service() {
     }
     
     /**
-     * 更新锁机时段
+     * 更新锁机时段 - 定时监控核心逻辑
      */
     private fun updateLockPeriod() {
         serviceScope.launch {
@@ -140,7 +162,7 @@ class MonitorService : Service() {
                 val unlockMinutes = unlockTime.first * 60 + unlockTime.second
                 
                 // 处理跨夜情况
-                val shouldBeLocked = if (lockMinutes > unlockMinutes) {
+                val isInTimePeriod = if (lockMinutes > unlockMinutes) {
                     currentMinutes >= lockMinutes || currentMinutes < unlockMinutes
                 } else {
                     currentMinutes >= lockMinutes && currentMinutes < unlockMinutes
@@ -150,16 +172,22 @@ class MonitorService : Service() {
                 val testMode = prefs.getBoolean("test_mode", false)
                 val isLockActive = prefs.getBoolean(KEY_LOCK_ACTIVE, false)
                 
+                // 必须同时满足：在锁机时段内 + 锁机服务已激活
+                val shouldBeLocked = isInTimePeriod && (isLockActive || testMode)
+                
                 // 更新无障碍服务状态
                 mainHandler.post {
                     MonitorAccessibilityService.getInstance()?.let { service ->
-                        service.setLockPeriod(shouldBeLocked && (isLockActive || testMode))
-                        Log.d(TAG, "🔄 已通知无障碍服务：锁机时段=$shouldBeLocked, 激活=$isLockActive")
+                        service.setLockPeriod(shouldBeLocked)
+                        val logMsg = "🔄 定时监控更新：锁机=$shouldBeLocked (时间=$isInTimePeriod, 激活=$isLockActive, 测试=$testMode)"
+                        Log.d(TAG, logMsg)
+                        LogManager.d(ExecutionLog.LogCategory.SCHEDULER, "PeriodicUpdate", logMsg)
                     }
                 }
                 
             } catch (e: Exception) {
                 Log.e(TAG, "更新锁机时段失败", e)
+                LogManager.e(ExecutionLog.LogCategory.SCHEDULER, "PeriodicUpdate", "❌ 更新锁机时段失败：${e.message}")
             }
         }
     }
