@@ -18,9 +18,10 @@ import com.sleeplock.data.entity.*
         Holiday::class,
         UserSettings::class,
         UnlockCredit::class,
-        ViolationLog::class
+        ViolationLog::class,
+        ExecutionLog::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -32,6 +33,7 @@ abstract class SleepLockDatabase : RoomDatabase() {
     abstract fun userSettingsDao(): UserSettingsDao
     abstract fun unlockCreditDao(): UnlockCreditDao
     abstract fun violationLogDao(): ViolationLogDao
+    abstract fun executionLogDao(): ExecutionLogDao
     
     companion object {
         @Volatile

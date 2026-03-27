@@ -4,15 +4,29 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import com.sleeplock.data.entity.ExecutionLog
 import com.sleeplock.service.LockService
+import com.sleeplock.service.MonitorAccessibilityService
+import com.sleeplock.service.MonitorService
 import com.sleeplock.service.SleepMonitorService
-import com.sleeplock.ui.LockScreenActivity
+import com.sleeplock.util.LogManager
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /**
- * 屏幕状态接收器 - 监听息屏/亮屏事件，实现强制锁屏
+ * 屏幕状态接收器 - 监听息屏/亮屏/解锁事件
+ * 
+ * 职责：
+ * - 监听屏幕状态变化
+ * - 通知监控服务更新状态
+ * - 不再负责应用拦截（由 MonitorAccessibilityService 负责）
  */
 class ScreenReceiver : BroadcastReceiver() {
     
@@ -20,171 +34,83 @@ class ScreenReceiver : BroadcastReceiver() {
         private const val TAG = "ScreenReceiver"
         private const val PREFS_NAME = "SleepLock"
         private const val KEY_LOCK_ACTIVE = "is_lock_active"
-        
-        // 测试模式：锁屏持续时间（毫秒）
-        private const val TEST_LOCK_DURATION = 2 * 60 * 1000L // 2 分钟
     }
     
     private val handler = Handler(Looper.getMainLooper())
+    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     
     override fun onReceive(context: Context, intent: Intent) {
         val action = intent.action
-        Log.d(TAG, "屏幕状态变化：$action")
+        Log.d(TAG, "📱 屏幕状态：$action")
         
         when (action) {
             Intent.ACTION_SCREEN_OFF -> {
-                Log.d(TAG, "屏幕关闭")
+                Log.d(TAG, "⚫ 屏幕关闭")
+                LogManager.screenStatus("ScreenReceiver", "⚫ 屏幕关闭")
                 SleepMonitorService.onScreenOff(context)
             }
+            
             Intent.ACTION_USER_PRESENT -> {
-                Log.d(TAG, "⚠️ 用户解锁 - 立即执行强制锁屏")
+                Log.d(TAG, "🔓 用户解锁")
+                LogManager.screenStatus("ScreenReceiver", "🔓 用户解锁 - 准备恢复监控")
                 SleepMonitorService.onUserPresent(context)
                 
-                // 立即执行强制锁屏（无延迟）
-                forceRelock(context)
+                // 用户解锁后，确保监控服务正在运行
+                handler.postDelayed({
+                    ensureMonitoringActive(context)
+                }, 500)
             }
+            
             Intent.ACTION_SCREEN_ON -> {
-                Log.d(TAG, "屏幕开启")
-                // 屏幕亮起时也检查（防止用户在锁屏界面操作）
-                checkAndShowLockOverlay(context)
+                Log.d(TAG, "💡 屏幕开启")
+                LogManager.screenStatus("ScreenReceiver", "💡 屏幕开启")
             }
         }
     }
     
     /**
-     * 强制重新锁屏 - 多重防护
+     * 确保监控服务活跃 - 解锁后立即恢复监控
      */
-    private fun forceRelock(context: Context) {
+    private fun ensureMonitoringActive(context: Context) {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val isLockActive = prefs.getBoolean(KEY_LOCK_ACTIVE, false)
         
-        Log.d(TAG, "检查锁机状态: isLockActive=$isLockActive")
+        Log.d(TAG, "🔍 检查监控状态：isLockActive=$isLockActive")
         
         if (!isLockActive) {
-            Log.d(TAG, "锁机服务未激活，不重新锁屏")
+            Log.d(TAG, "锁机服务未激活，跳过")
             return
         }
         
-        // 检查是否在锁机时段
-        if (!isInLockPeriod(context, prefs)) {
-            Log.d(TAG, "当前不在锁机时段，不重新锁屏")
-            return
-        }
-        
-        Log.d(TAG, "🔒 执行强制锁屏...")
-        
-        // 方法1: 立即启动锁屏 Activity（最快响应用户看到）
-        try {
-            val intent = Intent(context, LockScreenActivity::class.java).apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or 
-                         Intent.FLAG_ACTIVITY_CLEAR_TASK or
-                         Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS or
-                         Intent.FLAG_ACTIVITY_NO_ANIMATION)
-            }
-            context.startActivity(intent)
-            Log.d(TAG, "✅ 已启动 LockScreenActivity")
-        } catch (e: Exception) {
-            Log.e(TAG, "❌ 启动 LockScreenActivity 失败", e)
-        }
-        
-        // 方法2: 立即锁屏
-        handler.post {
+        // 检查无障碍服务是否运行
+        val accessibilityService = MonitorAccessibilityService.getInstance()
+        if (accessibilityService == null) {
+            Log.w(TAG, "⚠️ 无障碍服务未运行，尝试恢复")
+            // 尝试启动监控服务来恢复无障碍服务
             try {
-                val success = LockService.lockScreen(context)
-                Log.d(TAG, "锁屏结果: $success")
-            } catch (e: Exception) {
-                Log.e(TAG, "锁屏失败", e)
-            }
-        }
-        
-        // 方法3: 200ms 后再次检查并锁屏（确保成功）
-        handler.postDelayed({
-            if (prefs.getBoolean(KEY_LOCK_ACTIVE, false) && isInLockPeriod(context, prefs)) {
-                Log.d(TAG, "二次确认锁屏")
-                LockService.lockScreen(context)
-            }
-        }, 200)
-        
-        // 方法4: 500ms 后再次检查
-        handler.postDelayed({
-            if (prefs.getBoolean(KEY_LOCK_ACTIVE, false) && isInLockPeriod(context, prefs)) {
-                Log.d(TAG, "三次确认锁屏")
-                LockService.lockScreen(context)
-            }
-        }, 500)
-    }
-    
-    /**
-     * 检查并显示锁屏覆盖层
-     */
-    private fun checkAndShowLockOverlay(context: Context) {
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val isLockActive = prefs.getBoolean(KEY_LOCK_ACTIVE, false)
-        
-        if (isLockActive && isInLockPeriod(context, prefs)) {
-            // 延迟启动覆盖层（给系统时间完成亮屏）
-            handler.postDelayed({
-                try {
-                    val intent = Intent(context, LockScreenActivity::class.java).apply {
-                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or
-                                 Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS)
-                    }
-                    context.startActivity(intent)
-                } catch (e: Exception) {
-                    Log.e(TAG, "启动覆盖层失败", e)
+                val monitorIntent = Intent(context, MonitorService::class.java)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    context.startForegroundService(monitorIntent)
+                } else {
+                    context.startService(monitorIntent)
                 }
-            }, 100)
-        }
-    }
-    
-    /**
-     * 检查当前时间是否在锁机时段
-     */
-    private fun isInLockPeriod(context: Context, prefs: SharedPreferences): Boolean {
-        // 测试模式：锁机后2分钟内持续锁屏
-        val testMode = prefs.getBoolean("test_mode", false)
-        if (testMode) {
-            val lockStartTime = prefs.getLong("lock_start_time", 0)
-            val elapsed = System.currentTimeMillis() - lockStartTime
-            val remaining = TEST_LOCK_DURATION - elapsed
-            Log.d(TAG, "测试模式: 已过 ${elapsed/1000}秒, 剩余 ${remaining/1000}秒")
-            return elapsed < TEST_LOCK_DURATION
-        }
-        
-        // 正常模式：检查时间段
-        val lockTime = prefs.getString("lock_time", "23:40") ?: "23:40"
-        val unlockTime = prefs.getString("unlock_time", "06:00") ?: "06:00"
-        
-        return isInTimePeriod(lockTime, unlockTime)
-    }
-    
-    /**
-     * 检查当前时间是否在指定时间段内
-     */
-    private fun isInTimePeriod(startTime: String, endTime: String): Boolean {
-        try {
-            val now = java.util.Calendar.getInstance()
-            val currentMinutes = now.get(java.util.Calendar.HOUR_OF_DAY) * 60 + now.get(java.util.Calendar.MINUTE)
-            
-            val startParts = startTime.split(":")
-            val startMinutes = startParts[0].toInt() * 60 + startParts[1].toInt()
-            
-            val endParts = endTime.split(":")
-            val endMinutes = endParts[0].toInt() * 60 + endParts[1].toInt()
-            
-            // 处理跨夜情况（如 23:40 - 06:00）
-            val inPeriod = if (startMinutes > endMinutes) {
-                currentMinutes >= startMinutes || currentMinutes < endMinutes
-            } else {
-                currentMinutes >= startMinutes && currentMinutes < endMinutes
+                Log.d(TAG, "🚀 已尝试启动监控服务")
+            } catch (e: Exception) {
+                Log.e(TAG, "启动监控服务失败", e)
             }
-            
-            Log.d(TAG, "时间检查: 当前=$currentMinutes 分钟, 时段=$startMinutes-$endMinutes, 在时段内=$inPeriod")
-            return inPeriod
-            
-        } catch (e: Exception) {
-            Log.e(TAG, "解析时间失败", e)
-            return false
+            return
         }
+        
+        // 立即更新锁机时段状态（强制刷新）
+        scope.launch {
+            Log.d(TAG, "🔄 解锁后立即更新锁机时段")
+            accessibilityService.updateLockPeriod()
+            
+            // 确保锁机时段被正确设置
+            delay(500)
+            accessibilityService.updateLockPeriod()
+        }
+        
+        Log.d(TAG, "✅ 监控服务已确认活跃")
     }
 }

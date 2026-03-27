@@ -2,6 +2,7 @@ package com.sleeplock.ui
 
 import android.app.Activity
 import android.app.TimePickerDialog
+import android.content.Intent
 import android.os.Bundle
 import android.util.Log
 import android.view.Gravity
@@ -200,6 +201,34 @@ class SettingsActivity : Activity() {
         }
         layout.addView(saveButton, createFullWidthParams().apply {
             topMargin = 50
+        })
+        
+        // 分隔线
+        layout.addView(createDivider())
+        
+        // 日志查看按钮
+        val logButton = Button(this).apply {
+            text = "📋 查看执行日志"
+            textSize = 16f
+            setTextColor(ContextCompat.getColor(this@SettingsActivity, android.R.color.white))
+            setBackgroundColor(ContextCompat.getColor(this@SettingsActivity, android.R.color.darker_gray))
+            gravity = Gravity.CENTER
+            setPadding(30, 20, 30, 20)
+            elevation = 2f
+            setOnClickListener {
+                val intent = Intent(this@SettingsActivity, LogViewerActivity::class.java)
+                startActivity(intent)
+            }
+        }
+        layout.addView(logButton, createFullWidthParams())
+        
+        // 日志说明
+        layout.addView(TextView(this).apply {
+            text = "💡 查看应用运行日志，包括服务状态、应用拦截、屏幕状态等"
+            textSize = 12f
+            setTextColor(ContextCompat.getColor(this@SettingsActivity, android.R.color.darker_gray))
+            gravity = Gravity.CENTER
+            setPadding(0, 10, 0, 20)
         })
         
         return scrollView

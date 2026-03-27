@@ -2,88 +2,201 @@ package com.sleeplock.service
 
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.AccessibilityServiceInfo
+import android.content.Context
 import android.content.Intent
+import android.content.SharedPreferences
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
-import android.view.accessibility.AccessibilityNodeInfo
 import com.sleeplock.data.SleepLockDatabase
+import com.sleeplock.data.entity.ExecutionLog
+import com.sleeplock.ui.LockScreenActivity
+import com.sleeplock.util.LogManager
 import kotlinx.coroutines.*
-import java.text.SimpleDateFormat
 import java.util.*
 
 /**
- * 无障碍监控服务 - 监控前台应用，拦截非白名单应用
+ * 无障碍监控服务 - 严格监控前台应用，拦截非白名单应用
+ * 
+ * 核心功能：
+ * - 实时监控前台应用变化
+ * - 检测到非白名单应用立即拦截
+ * - 显示拦截界面并强制返回桌面
+ * - 记录违规日志
  */
 class MonitorAccessibilityService : AccessibilityService() {
     
     companion object {
         private const val TAG = "MonitorAccessibility"
+        private const val INTERCEPT_DELAY = 500L // 拦截延迟（防止误判）
         
         @Volatile
         private var instance: MonitorAccessibilityService? = null
         
         fun getInstance(): MonitorAccessibilityService? = instance
-        
-        /**
-         * 检查服务是否正在运行
-         */
         fun isRunning(): Boolean = instance != null
     }
     
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-    private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.CHINA)
-    private val timeFormat = SimpleDateFormat("HH:mm", Locale.CHINA)
+    private val mainHandler = Handler(Looper.getMainLooper())
     
     private var isLockPeriod = false
     private var currentPackageName: String = ""
+    private var lastInterceptTime = 0L
+    private var interceptCount = 0 // 拦截次数统计
+    private var isIntercepting = false // 是否正在拦截中
     
     // 基础白名单（始终允许）
     private val baseWhitelist = setOf(
-        "com.android.phone",           // 电话
-        "com.android.incallui",         // 来电界面
-        "com.android.mms",              // 短信
-        "com.android.settings",         // 设置
-        "com.sleeplock",                // 本应用
-        "android",                      // 系统
-        "com.android.systemui"          // 系统 UI
+        "com.android.phone",              // 电话
+        "com.android.incallui",            // 来电界面
+        "com.android.mms",                 // 短信
+        "com.android.messaging",           // 短信（新版本）
+        "com.android.settings",            // 设置
+        "com.android.contacts",            // 联系人
+        "com.android.dialer",              // 拨号器
+        "com.sleeplock",                   // 本应用
+        "com.sleeplock.ui",                // 本应用 UI
+        "android",                         // 系统
+        "com.android.systemui",            // 系统 UI
+        "com.google.android.dialer",       // Google 拨号器
+        "com.google.android.apps.messaging" // Google 短信
+    )
+    
+    // 娱乐应用黑名单（这些应用会被严格拦截）
+    private val entertainmentBlacklist = setOf(
+        // 视频类
+        "com.tencent.qqlive",              // 腾讯视频
+        "com.qiyi.video",                  // 爱奇艺
+        "com.youku.phone",                 // 优酷
+        "com.baidu.video",                 // 百度视频
+        "tv.danmaku.bili",                 // 哔哩哔哩
+        "com.google.android.youtube",      // YouTube
+        "com.ss.android.ugc.aweme",        // 抖音
+        "com.ss.android.ugc.live",         // 抖音直播
+        "com.kuaishou.nebula",             // 快手
+        "com.xunmeng.pinduoduo",           // 拼多多（娱乐购物）
+        
+        // 游戏类
+        "com.tencent.tmgp",                // 腾讯游戏
+        "com.netease",                     // 网易游戏
+        "com.miHoYo",                      // 米哈游
+        "com.tencent.ig",                  // PUBG
+        "com.tencent.tmgp.sgame",          // 王者荣耀
+        "com.tencent.tmgp.cf",             // 穿越火线
+        "com.epicgames.fortnite",          // 堡垒之夜
+        "com.mojang.minecraftpe",          // 我的世界
+        "com.roblox.client",               // Roblox
+        "com.garena.game.freefire",        // Free Fire
+        
+        // 社交类
+        "com.tencent.mobileqq",            // QQ
+        "com.tencent.mm",                  // 微信
+        "com.sina.weibo",                  // 微博
+        "com.instagram.android",           // Instagram
+        "com.facebook.katana",             // Facebook
+        "com.twitter.android",             // Twitter
+        "com.snapchat.android",            // Snapchat
+        "com.zhihu.android",               // 知乎
+        "com.xiaohongshu.android",         // 小红书
+        "com.douban.frodo",                // 豆瓣
+        
+        // 音乐类
+        "com.netease.cloudmusic",          // 网易云音乐
+        "com.tencent.qqmusic",             // QQ 音乐
+        "com.kuwo.player",                 // 酷我音乐
+        "music.163.com",                   // 网易云音乐
+        "fm.xiami.main",                  // 虾米音乐
+        
+        // 阅读/小说类
+        "com.qidian.QDReader",            // 起点读书
+        "com.flyread.reader",             // 飞读小说
+        "com.qq.reader",                  // QQ 阅读
+        "com.dangdang.reader",            // 当当阅读
+        
+        // 直播类
+        "com.douyu.live",                 // 斗鱼
+        "com.huya.live",                  // 虎牙
+        "com.live.bilibili"               // B 站直播
     )
     
     override fun onServiceConnected() {
         super.onServiceConnected()
         instance = this
-        Log.d(TAG, "无障碍服务已连接")
+        Log.d(TAG, "🛡️ 无障碍服务已连接 - 严格监控模式")
         
-        // 配置服务
+        // 记录日志
+        LogManager.serviceStatus("AccessibilityService", "✅ 服务已连接 - 严格监控模式")
+        
+        // 配置服务 - 最大化监控
         val info = AccessibilityServiceInfo().apply {
             eventTypes = AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED or
-                        AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED
+                        AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED or
+                        AccessibilityEvent.TYPE_WINDOWS_CHANGED
             feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC
             flags = AccessibilityServiceInfo.FLAG_INCLUDE_NOT_IMPORTANT_VIEWS or
                    AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS or
-                   AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
-            notificationTimeout = 100
+                   AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS or
+                   AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS
+            notificationTimeout = 50
         }
         serviceInfo = info
+        
+        // 启动定期检查
+        startPeriodicCheck()
+    }
+    
+    /**
+     * 启动定期检查任务 - 持续监控，无论是否锁屏
+     */
+    private fun startPeriodicCheck() {
+        serviceScope.launch {
+            while (isActive) {
+                delay(1000) // 每秒检查一次
+                
+                // 每次检查前都更新锁机时段（确保状态同步）
+                updateLockPeriod()
+                
+                // 只要当前有应用就检查（不依赖 isLockPeriod，因为 updateLockPeriod 已更新它）
+                checkCurrentApp()
+            }
+        }
+    }
+    
+    /**
+     * 定期检查当前应用
+     */
+    private suspend fun checkCurrentApp() {
+        if (currentPackageName.isNotEmpty() && !isIntercepting && isLockPeriod) {
+            checkAndIntercept(currentPackageName)
+        }
     }
     
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         event ?: return
         
-        if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
-            val packageName = event.packageName?.toString() ?: return
-            
-            // 包名变化时检查
-            if (packageName != currentPackageName) {
-                currentPackageName = packageName
-                serviceScope.launch {
-                    checkAndIntercept(packageName)
+        when (event.eventType) {
+            AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED,
+            AccessibilityEvent.TYPE_WINDOWS_CHANGED -> {
+                val packageName = event.packageName?.toString() ?: return
+                
+                // 包名变化时立即检查（排除正在拦截的情况）
+                if (packageName != currentPackageName && !isIntercepting) {
+                    currentPackageName = packageName
+                    
+                    // 每次窗口变化时都更新锁机时段（确保解锁后立即恢复）
+                    serviceScope.launch {
+                        updateLockPeriod()
+                        checkAndIntercept(packageName)
+                    }
                 }
             }
         }
     }
     
     override fun onInterrupt() {
-        Log.w(TAG, "无障碍服务被中断")
+        Log.w(TAG, "⚠️ 无障碍服务被中断")
     }
     
     override fun onDestroy() {
@@ -94,7 +207,7 @@ class MonitorAccessibilityService : AccessibilityService() {
     }
     
     /**
-     * 检查并拦截应用
+     * 检查并拦截应用 - 无冷却时间，实时拦截
      */
     private suspend fun checkAndIntercept(packageName: String) {
         // 检查是否在锁机时段
@@ -104,30 +217,128 @@ class MonitorAccessibilityService : AccessibilityService() {
         
         // 检查是否在基础白名单
         if (packageName in baseWhitelist) {
-            Log.d(TAG, "基础白名单应用，允许：$packageName")
+            Log.d(TAG, "✅ 白名单应用：$packageName")
+            return
+        }
+        
+        // 检查是否在娱乐黑名单（严格拦截）
+        val isEntertainmentApp = isEntertainmentApp(packageName)
+        if (isEntertainmentApp) {
+            Log.w(TAG, "🚫 娱乐应用，立即拦截：$packageName")
+            interceptApp(packageName, "娱乐应用")
             return
         }
         
         // 检查用户白名单
-        val db = SleepLockDatabase.getDatabase(this@MonitorAccessibilityService)
-        val isWhitelisted = db.appWhitelistDao().isWhitelisted(packageName)
-        
-        if (isWhitelisted) {
-            Log.d(TAG, "用户白名单应用，允许：$packageName")
-            return
+        try {
+            val db = SleepLockDatabase.getDatabase(this)
+            val isWhitelisted = db.appWhitelistDao().isWhitelisted(packageName)
+            
+            if (isWhitelisted) {
+                Log.d(TAG, "✅ 用户白名单应用：$packageName")
+                return
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "查询白名单失败", e)
         }
         
-        // 拦截非白名单应用
-        Log.w(TAG, "拦截非白名单应用：$packageName")
-        interceptApp(packageName)
+        // 其他应用：根据设置决定是否拦截
+        // 默认策略：非白名单应用都拦截
+        Log.w(TAG, "⚠️ 非白名单应用，立即拦截：$packageName")
+        interceptApp(packageName, "非白名单应用")
     }
     
     /**
-     * 拦截应用 - 强制返回桌面
+     * 判断是否为娱乐应用
      */
-    private fun interceptApp(packageName: String) {
-        // 模拟按下 Home 键
-        performGlobalAction(GLOBAL_ACTION_HOME)
+    private fun isEntertainmentApp(packageName: String): Boolean {
+        // 检查是否在娱乐黑名单
+        if (packageName in entertainmentBlacklist) {
+            return true
+        }
+        
+        // 检查包名关键词
+        val entertainmentKeywords = listOf(
+            "tmgp",      // 腾讯游戏
+            "game",      // 游戏
+            "video",     // 视频
+            "movie",     // 电影
+            "music",     // 音乐
+            "live",      // 直播
+            "novel",     // 小说
+            "reader",    // 阅读器（娱乐类）
+            "bilibili",  // B 站
+            "douyin",    // 抖音
+            "kuaishou",  // 快手
+            "weibo",     // 微博
+            "instagram", // Instagram
+            "facebook",  // Facebook
+            "twitter",   // Twitter
+            "tiktok"     // TikTok
+        )
+        
+        return entertainmentKeywords.any { it in packageName.lowercase() }
+    }
+    
+    /**
+     * 拦截应用 - 无冷却时间，持续拦截
+     */
+    private fun interceptApp(packageName: String, reason: String) {
+        // 防止重复拦截
+        if (isIntercepting) {
+            Log.d(TAG, "⚠️ 正在拦截中，跳过：$packageName")
+            return
+        }
+        
+        isIntercepting = true
+        val now = System.currentTimeMillis()
+        lastInterceptTime = now
+        interceptCount++
+        
+        Log.w(TAG, "🚫 拦截 #${interceptCount} - $packageName ($reason)")
+        
+        // 记录拦截日志
+        LogManager.intercept("AppIntercept", packageName, reason)
+        
+        // 方法 1: 立即启动拦截界面（0 延迟）
+        mainHandler.post {
+            try {
+                val intent = Intent(this@MonitorAccessibilityService, LockScreenActivity::class.java).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or
+                             Intent.FLAG_ACTIVITY_CLEAR_TASK or
+                             Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS or
+                             Intent.FLAG_ACTIVITY_NO_ANIMATION)
+                    putExtra("mode", LockScreenActivity.Mode.LOCK_PERIOD.name)
+                    putExtra("package_name", packageName)
+                    putExtra("reason", reason)
+                }
+                startActivity(intent)
+                Log.d(TAG, "✅ 已显示拦截界面")
+            } catch (e: Exception) {
+                Log.e(TAG, "❌ 显示拦截界面失败", e)
+                isIntercepting = false
+            }
+        }
+        
+        // 方法 2: 0.5 秒后模拟 Home 键（更快响应）
+        mainHandler.postDelayed({
+            performGlobalAction(GLOBAL_ACTION_HOME)
+            Log.d(TAG, "🏠 已返回桌面")
+        }, 500)
+        
+        // 方法 3: 1.5 秒后再次确保
+        mainHandler.postDelayed({
+            if (isLockPeriod) {
+                performGlobalAction(GLOBAL_ACTION_HOME)
+                Log.d(TAG, "🔒 二次确认返回桌面")
+            }
+        }, 1500)
+        
+        // 方法 4: 3 秒后重置拦截状态
+        mainHandler.postDelayed({
+            isIntercepting = false
+            Log.d(TAG, "🔄 拦截状态已重置")
+        }, 3000)
         
         // 记录违规日志
         serviceScope.launch {
@@ -136,7 +347,7 @@ class MonitorAccessibilityService : AccessibilityService() {
                 db.violationLogDao().insert(
                     com.sleeplock.data.entity.ViolationLog(
                         type = "APP_INTERCEPT",
-                        description = "尝试打开非白名单应用：$packageName"
+                        description = "尝试打开$reason：$packageName (拦截 #${interceptCount})"
                     )
                 )
             } catch (e: Exception) {
@@ -150,11 +361,19 @@ class MonitorAccessibilityService : AccessibilityService() {
      */
     fun setLockPeriod(isLock: Boolean) {
         isLockPeriod = isLock
-        Log.d(TAG, "锁机时段：$isLock")
+        Log.d(TAG, "🔐 锁机时段：$isLock (拦截次数：$interceptCount)")
     }
     
     /**
-     * 检查当前时间是否在锁机时段
+     * 重置拦截计数
+     */
+    fun resetInterceptCount() {
+        interceptCount = 0
+        Log.d(TAG, "拦截计数已重置")
+    }
+    
+    /**
+     * 检查当前时间是否在锁机时段 - 同时检查 is_lock_active 标志
      */
     suspend fun updateLockPeriod() {
         try {
@@ -170,15 +389,36 @@ class MonitorAccessibilityService : AccessibilityService() {
             val unlockMinutes = unlockTime.first * 60 + unlockTime.second
             
             // 处理跨夜情况
-            isLockPeriod = if (lockMinutes > unlockMinutes) {
+            val isInTimePeriod = if (lockMinutes > unlockMinutes) {
                 currentMinutes >= lockMinutes || currentMinutes < unlockMinutes
             } else {
                 currentMinutes >= lockMinutes && currentMinutes < unlockMinutes
             }
             
-            Log.d(TAG, "锁机时段更新：$isLockPeriod")
+            // 检查 is_lock_active 标志（用户是否启动了锁机服务）
+            val prefs = getSharedPreferences("SleepLock", Context.MODE_PRIVATE)
+            val isLockActive = prefs.getBoolean("is_lock_active", false)
+            val testMode = prefs.getBoolean("test_mode", false)
+            
+            // 必须同时满足：在锁机时段内 + 锁机服务已激活
+            val shouldBeLocked = isInTimePeriod && (isLockActive || testMode)
+            
+            if (shouldBeLocked != isLockPeriod) {
+                isLockPeriod = shouldBeLocked
+                val logMsg = "🔄 锁机时段更新：$isLockPeriod (时间=$isInTimePeriod, 激活=$isLockActive, 测试=$testMode)"
+                Log.d(TAG, logMsg)
+                LogManager.d(ExecutionLog.LogCategory.SERVICE, "LockPeriod", logMsg)
+                
+                if (isLockPeriod) {
+                    resetInterceptCount()
+                }
+            } else if (isLockPeriod) {
+                // 即使状态没变，也定期输出日志确认
+                Log.v(TAG, "🔐 锁机状态保持：$isLockPeriod (时间=$isInTimePeriod, 激活=$isLockActive)")
+            }
         } catch (e: Exception) {
             Log.e(TAG, "更新锁机时段失败", e)
+            LogManager.e(ExecutionLog.LogCategory.SERVICE, "LockPeriod", "❌ 更新锁机时段失败：${e.message}")
         }
     }
     

@@ -1,17 +1,28 @@
 package com.sleeplock.service
 
 import android.app.*
+import android.content.Context
 import android.content.Intent
+import android.content.SharedPreferences
 import android.os.Build
 import android.os.IBinder
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.sleeplock.R
 import com.sleeplock.data.SleepLockDatabase
 import kotlinx.coroutines.*
+import java.util.Calendar
 
 /**
- * 前台监控服务 - 保持后台运行
+ * 前台监控服务 - 保持后台运行，监控锁机状态
+ * 
+ * 职责：
+ * - 作为前台服务保持后台运行
+ * - 定期检查锁机时段
+ * - 通知无障碍服务更新状态
+ * - 显示锁机状态通知
  */
 class MonitorService : Service() {
     
@@ -19,27 +30,35 @@ class MonitorService : Service() {
         private const val TAG = "MonitorService"
         private const val CHANNEL_ID = "lock_status_channel"
         private const val NOTIFICATION_ID = 1001
+        private const val PREFS_NAME = "SleepLock"
+        private const val KEY_LOCK_ACTIVE = "is_lock_active"
+        private const val CHECK_INTERVAL = 5 * 1000L // 5 秒检查一次（加快响应）
     }
     
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private lateinit var prefs: SharedPreferences
+    private var checkRunnable: Runnable? = null
     
     override fun onCreate() {
         super.onCreate()
-        Log.d(TAG, "监控服务已创建")
+        Log.d(TAG, "🔧 监控服务已创建")
+        prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         createNotificationChannel()
     }
     
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        Log.d(TAG, "监控服务已启动")
+        Log.d(TAG, "🚀 监控服务已启动")
         
         // 启动前台服务
         val notification = createNotification()
         startForeground(NOTIFICATION_ID, notification)
         
-        // 更新锁机时段
-        serviceScope.launch {
-            MonitorAccessibilityService.getInstance()?.updateLockPeriod()
-        }
+        // 立即更新锁机时段
+        updateLockPeriod()
+        
+        // 启动定期检查
+        startPeriodicCheck()
         
         return START_STICKY
     }
@@ -49,6 +68,7 @@ class MonitorService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         serviceScope.cancel()
+        mainHandler.removeCallbacksAndMessages(null)
         Log.d(TAG, "监控服务已销毁")
     }
     
@@ -75,12 +95,88 @@ class MonitorService : Service() {
      * 创建前台通知
      */
     private fun createNotification(): Notification {
+        val isLockActive = prefs.getBoolean(KEY_LOCK_ACTIVE, false)
+        val statusText = if (isLockActive) "锁机中 - 娱乐应用已拦截" else "待机中"
+        
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("专注锁机")
-            .setContentText("锁机模式运行中")
+            .setContentText(statusText)
             .setSmallIcon(android.R.drawable.ic_lock_lock)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOngoing(true)
             .build()
+    }
+    
+    /**
+     * 启动定期检查
+     */
+    private fun startPeriodicCheck() {
+        checkRunnable = object : Runnable {
+            override fun run() {
+                updateLockPeriod()
+                updateNotification()
+                mainHandler.postDelayed(this, CHECK_INTERVAL)
+            }
+        }
+        
+        mainHandler.post(checkRunnable!!)
+    }
+    
+    /**
+     * 更新锁机时段
+     */
+    private fun updateLockPeriod() {
+        serviceScope.launch {
+            try {
+                val db = SleepLockDatabase.getDatabase(this@MonitorService)
+                val settings = db.userSettingsDao().getSettings() ?: return@launch
+                
+                val currentTime = Calendar.getInstance()
+                val lockTime = parseTime(settings.lockTime)
+                val unlockTime = parseTime(settings.unlockTime)
+                
+                val currentMinutes = currentTime.get(Calendar.HOUR_OF_DAY) * 60 + currentTime.get(Calendar.MINUTE)
+                val lockMinutes = lockTime.first * 60 + lockTime.second
+                val unlockMinutes = unlockTime.first * 60 + unlockTime.second
+                
+                // 处理跨夜情况
+                val shouldBeLocked = if (lockMinutes > unlockMinutes) {
+                    currentMinutes >= lockMinutes || currentMinutes < unlockMinutes
+                } else {
+                    currentMinutes >= lockMinutes && currentMinutes < unlockMinutes
+                }
+                
+                // 检查是否是测试模式
+                val testMode = prefs.getBoolean("test_mode", false)
+                val isLockActive = prefs.getBoolean(KEY_LOCK_ACTIVE, false)
+                
+                // 更新无障碍服务状态
+                mainHandler.post {
+                    MonitorAccessibilityService.getInstance()?.let { service ->
+                        service.setLockPeriod(shouldBeLocked && (isLockActive || testMode))
+                        Log.d(TAG, "🔄 已通知无障碍服务：锁机时段=$shouldBeLocked, 激活=$isLockActive")
+                    }
+                }
+                
+            } catch (e: Exception) {
+                Log.e(TAG, "更新锁机时段失败", e)
+            }
+        }
+    }
+    
+    /**
+     * 更新通知
+     */
+    private fun updateNotification() {
+        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        notificationManager.notify(NOTIFICATION_ID, createNotification())
+    }
+    
+    /**
+     * 解析时间字符串
+     */
+    private fun parseTime(timeStr: String): Pair<Int, Int> {
+        val parts = timeStr.split(":")
+        return Pair(parts[0].toInt(), parts[1].toInt())
     }
 }
