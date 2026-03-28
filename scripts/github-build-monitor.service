@@ -1,0 +1,15 @@
+[Unit]
+Description=GitHub Actions Build Monitor for SleepLock
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/.openclaw/workspace/SleepLock
+ExecStart=/bin/bash /root/.openclaw/workspace/SleepLock/scripts/monitor-build.sh
+Restart=on-failure
+RestartSec=60
+Environment="GH_TOKEN=$(cat /root/.github-token 2>/dev/null || echo '')"
+
+[Install]
+WantedBy=multi-user.target
