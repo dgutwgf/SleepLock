@@ -1,6 +1,7 @@
 package com.sleeplock.ui
 
 import android.app.Activity
+import android.app.AlertDialog
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
@@ -17,6 +18,7 @@ import com.sleeplock.data.entity.UserSettings
 import com.sleeplock.service.LockService
 import com.sleeplock.util.SchedulerManager
 import com.sleeplock.util.HolidayManager
+import com.sleeplock.util.PermissionChecker
 import kotlinx.coroutines.*
 
 /**
@@ -186,6 +188,17 @@ class MainActivity : Activity() {
             stopLockService()
         }
         layout.addView(stopButton, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply {
+            bottomMargin = 15
+        })
+        
+        // 权限检查按钮
+        val permissionCheckButton = createSecondaryButton(this, "📋 检查权限状态") {
+            checkAllPermissions()
+        }
+        layout.addView(permissionCheckButton, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT,
             LinearLayout.LayoutParams.WRAP_CONTENT
         ).apply {
@@ -454,6 +467,64 @@ class MainActivity : Activity() {
                         .apply()
                 }
             }
+        }
+    }
+    
+    /**
+     * 检查所有权限状态
+     */
+    private fun checkAllPermissions() {
+        Log.d(TAG, "=== 开始检查权限 ===")
+        
+        val report = PermissionChecker.generateReport(this)
+        Log.d(TAG, report)
+        
+        // 显示权限报告对话框
+        val builder = AlertDialog.Builder(this)
+        builder.setTitle("📋 权限检查报告")
+        builder.setMessage(report)
+        builder.setPositiveButton("确定", null)
+        
+        // 添加快速修复按钮
+        builder.setNeutralButton("一键修复") { _, _ ->
+            fixMissingPermissions()
+        }
+        
+        builder.show()
+    }
+    
+    /**
+     * 修复缺失的权限
+     */
+    private fun fixMissingPermissions() {
+        val permissions = PermissionChecker.checkAllPermissions(this)
+        val missingRequired = permissions.filter { !it.granted && it.required }
+        
+        if (missingRequired.isEmpty()) {
+            Toast.makeText(this, "✅ 所有必需权限已授予", Toast.LENGTH_SHORT).show()
+            return
+        }
+        
+        // 优先处理设备管理员权限
+        val deviceAdmin = missingRequired.find { it.name == "设备管理员权限" }
+        if (deviceAdmin != null) {
+            Toast.makeText(this, "请先授予设备管理员权限", Toast.LENGTH_LONG).show()
+            LockService.requestAdminPermission(this, REQUEST_ADMIN)
+            return
+        }
+        
+        // 其他权限依次打开设置页面
+        val firstMissing = missingRequired.first()
+        Toast.makeText(this, "请手动授予：${firstMissing.name}", Toast.LENGTH_LONG).show()
+        
+        try {
+            val intent = Intent(firstMissing.fixAction ?: Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+            intent.data = android.net.Uri.fromParts("package", packageName, null)
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            startActivity(intent)
+        } catch (e: Exception) {
+            Log.e(TAG, "打开设置页面失败", e)
+            Toast.makeText(this, "无法打开设置页面，请手动到设置中查找", Toast.LENGTH_LONG).show()
         }
     }
     
