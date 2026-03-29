@@ -306,7 +306,9 @@ class MonitorAccessibilityService : AccessibilityService() {
         // 2. 检查数据库中的自定义黑名单
         try {
             val db = SleepLockDatabase.getDatabase(this)
-            if (db.appBlacklistDao().isBlacklisted(packageName)) {
+            val isCustomBlacklisted = db.appBlacklistDao().isBlacklisted(packageName)
+            if (isCustomBlacklisted) {
+                Log.w(TAG, "⚠️ 数据库自定义黑名单拦截：$packageName")
                 return true
             }
         } catch (e: Exception) {
