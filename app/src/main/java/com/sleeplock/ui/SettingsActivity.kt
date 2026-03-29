@@ -393,7 +393,7 @@ class SettingsActivity : Activity() {
      * 验证设备密码后保存设置
      */
     private fun verifyAndSaveSettings() {
-        val devicePolicyManager = getSystemService(Context.DEVICE_POLICY_SERVICE) as android.app.admin.DevicePolicyManager
+        val keyguardManager = getSystemService(Context.KEYGUARD_SERVICE) as android.app.KeyguardManager
         
         // 检查是否需要验证（锁机时段内修改关键设置需要验证）
         val prefs = getSharedPreferences("SleepLock", Context.MODE_PRIVATE)
@@ -402,17 +402,14 @@ class SettingsActivity : Activity() {
         
         if (isLockActive && isInLockPeriod) {
             // 需要设备密码验证
-            if (devicePolicyManager.isDeviceLocked) {
-                // 设备已锁定，要求解锁
-                val confirmIntent = devicePolicyManager.createConfirmDeviceCredentialIntent(
-                    "修改设置验证",
-                    "请输入设备密码以确认修改锁机设置"
-                )
-                if (confirmIntent != null) {
-                    isWaitingForVerification = true
-                    startActivityForResult(confirmIntent, REQUEST_CODE_CONFIRM_DEVICE_CREDENTIALS)
-                    return
-                }
+            val confirmIntent = keyguardManager.createConfirmDeviceCredentialIntent(
+                "修改设置验证",
+                "请输入设备密码以确认修改锁机设置"
+            )
+            if (confirmIntent != null) {
+                isWaitingForVerification = true
+                startActivityForResult(confirmIntent, REQUEST_CODE_CONFIRM_DEVICE_CREDENTIALS)
+                return
             }
         }
         
