@@ -261,6 +261,19 @@ class BlacklistManageActivity : Activity() {
             setPadding(0, 10, 0, 20)
         })
         
+        // 清除无效黑名单按钮
+        val clearButton = Button(this).apply {
+            text = "🗑️ 清除无效黑名单"
+            textSize = 14f
+            setBackgroundColor(Color.parseColor("#FF9800"))
+            setTextColor(Color.WHITE)
+            setPadding(30, 15, 30, 15)
+            setOnClickListener {
+                clearInvalidBlacklist()
+            }
+        }
+        layout.addView(clearButton)
+        
         // 添加按钮（初始禁用，数据加载完成后启用）
         val addButton = Button(this).apply {
             text = "+ 添加应用到黑名单"
@@ -384,6 +397,60 @@ class BlacklistManageActivity : Activity() {
                packageName in FORCE_BLACKLIST_BROWSER ||
                packageName in FORCE_BLACKLIST_MUSIC ||
                FORCE_BLACKLIST_GAME.any { packageName.startsWith(it) }
+    }
+    
+    /**
+     * 清除无效黑名单（已卸载应用和办公软件）
+     */
+    private fun clearInvalidBlacklist() {
+        ioScope.launch {
+            try {
+                val db = SleepLockDatabase.getDatabase(this@BlacklistManageActivity)
+                val allItems = db.appBlacklistDao().getAll()
+                val pm = packageManager
+                val installedPackages = pm.getInstalledApplications(0).map { it.packageName }
+                
+                // 应该保留的办公软件（不拦截）
+                val officePackages = setOf(
+                    "com.tencent.mm",              // 微信
+                    "com.tencent.wework",          // 企业微信
+                    "com.larksuite.suite",         // 飞书
+                    "com.dingtalk.enterprise",     // 钉钉
+                    "com.ss.android.lark",         // 飞书国际版
+                    "com.tencent.mobileqq"         // QQ（保留，可选）
+                )
+                
+                var clearedCount = 0
+                
+                allItems.forEach { item ->
+                    // 已卸载的应用 或 办公软件 → 清除
+                    if (item.packageName !in installedPackages || item.packageName in officePackages) {
+                        db.appBlacklistDao().deleteByPackageName(item.packageName)
+                        clearedCount++
+                        Log.d(TAG, "清除无效黑名单：${item.packageName}")
+                    }
+                }
+                
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(
+                        this@BlacklistManageActivity,
+                        "已清除 $clearedCount 个无效黑名单记录",
+                        Toast.LENGTH_LONG
+                    ).show()
+                    // 重新加载数据
+                    loadData()
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "清除无效黑名单失败", e)
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(
+                        this@BlacklistManageActivity,
+                        "清除失败：${e.message}",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }
+        }
     }
     
     /**
