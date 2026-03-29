@@ -479,22 +479,7 @@ class MonitorAccessibilityService : AccessibilityService() {
         }, 3000)
         
         // 记录违规日志
-        serviceScope.launch {
-            try {
-                val db = SleepLockDatabase.getDatabase(this@MonitorAccessibilityService)
-                
-                // 记录到 ViolationLog
-                val violationLog = com.sleeplock.data.entity.ViolationLog(
-                    packageName = packageName,
-                    appName = appName.ifEmpty { packageName },
-                    timestamp = System.currentTimeMillis(),
-                    reason = reason
-                )
-                db.violationLogDao().insert(violationLog)
-            } catch (e: Exception) {
-                Log.e(TAG, "记录违规日志失败", e)
-            }
-        }
+        recordViolationLog(packageName, appName, reason)
     }
     
     /**
