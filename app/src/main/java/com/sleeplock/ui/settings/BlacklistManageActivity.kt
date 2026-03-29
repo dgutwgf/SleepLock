@@ -55,9 +55,9 @@ class BlacklistManageActivity : Activity() {
     private val ioScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private lateinit var appsListView: ListView
     private lateinit var loadingView: View
-    private lateinit var installedApps: List<AppInfo>
-    private lateinit var blacklistedPackages: MutableSet<String>
-    private val adapter by lazy { AppAdapter(this) }
+    private var installedApps: List<AppInfo> = emptyList()
+    private var blacklistedPackages: MutableSet<String> = mutableSetOf()
+    private var adapter: AppAdapter? = null
     
     data class AppInfo(
         val packageName: String,
@@ -136,9 +136,8 @@ class BlacklistManageActivity : Activity() {
         }
         layout.addView(loadingView)
         
-        // 应用列表
+        // 应用列表（初始不设置 adapter，数据加载完成后再设置）
         appsListView = ListView(this).apply {
-            adapter = this@BlacklistManageActivity.adapter
             divider = ColorDrawable(Color.parseColor("#e0e0e0"))
             dividerHeight = 1
             visibility = View.GONE
@@ -191,9 +190,12 @@ class BlacklistManageActivity : Activity() {
                 }.filter { !it.packageName.startsWith("com.sleeplock") } // 排除本应用
                 
                 withContext(Dispatchers.Main) {
+                    // 数据加载完成后再创建并设置 adapter
+                    adapter = AppAdapter(this@BlacklistManageActivity)
+                    appsListView.adapter = adapter
                     loadingView.visibility = View.GONE
                     appsListView.visibility = View.VISIBLE
-                    adapter.notifyDataSetChanged()
+                    adapter!!.notifyDataSetChanged()
                     
                     val count = installedApps.count { it.isBlacklisted }
                     Toast.makeText(
@@ -237,6 +239,11 @@ class BlacklistManageActivity : Activity() {
      * 显示添加应用对话框
      */
     private fun showAddAppDialog() {
+        if (adapter == null) {
+            Toast.makeText(this, "数据加载中，请稍后", Toast.LENGTH_SHORT).show()
+            return
+        }
+        
         val nonBlacklistedApps = installedApps.filter { !it.isBlacklisted }
             .sortedBy { it.appName.lowercase() }
         
@@ -346,7 +353,7 @@ class BlacklistManageActivity : Activity() {
         
         override fun getView(position: Int, convertView: View?, parent: ViewGroup?): View {
             val view = convertView ?: inflater.inflate(android.R.layout.simple_list_item_2, parent, false)
-            val app = installedApps[position]
+            val app = installedApps.getOrNull(position) ?: return view
             
             view.findViewById<TextView>(android.R.id.text1).apply {
                 text = app.appName
