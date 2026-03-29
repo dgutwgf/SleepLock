@@ -154,21 +154,19 @@ class MonitorAccessibilityService : AccessibilityService() {
         serviceScope.launch {
             var checkCount = 0
             while (isActive) {
-                delay(1000) // 每秒检查一次
+                delay(10000) // 每 10 秒检查一次
                 checkCount++
                 
                 // 每次检查前都更新锁机时段（确保状态同步）
                 updateLockPeriod()
                 
-                // 每 10 次检查输出一次详细日志（避免日志过多）
-                if (checkCount % 10 == 0) {
-                    val prefs = getSharedPreferences("SleepLock", Context.MODE_PRIVATE)
-                    val isLockActive = prefs.getBoolean("is_lock_active", false)
-                    val testMode = prefs.getBoolean("test_mode", false)
-                    Log.d(TAG, "📊 定时监控检查 #${checkCount} - 锁机=$isLockPeriod, 激活=$isLockActive, 测试=$testMode")
-                    LogManager.d(ExecutionLog.LogCategory.SERVICE, "PeriodicCheck", 
-                        "📊 定时监控检查 #${checkCount} - 锁机=$isLockPeriod, 激活=$isLockActive, 测试=$testMode")
-                }
+                // 每次检查都输出日志（10 秒一次，频率较低）
+                val prefs = getSharedPreferences("SleepLock", Context.MODE_PRIVATE)
+                val isLockActive = prefs.getBoolean("is_lock_active", false)
+                val testMode = prefs.getBoolean("test_mode", false)
+                Log.d(TAG, "📊 定时监控检查 #${checkCount} - 锁机=$isLockPeriod, 激活=$isLockActive, 测试=$testMode")
+                LogManager.d(ExecutionLog.LogCategory.SERVICE, "PeriodicCheck", 
+                    "📊 定时监控检查 #${checkCount} - 锁机=$isLockPeriod, 激活=$isLockActive, 测试=$testMode")
                 
                 // 只要当前有应用就检查（不依赖 isLockPeriod，因为 updateLockPeriod 已更新它）
                 checkCurrentApp()
