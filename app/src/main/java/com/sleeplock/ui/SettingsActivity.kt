@@ -3,6 +3,7 @@ package com.sleeplock.ui
 import android.app.Activity
 import android.app.TimePickerDialog
 import android.content.Intent
+import android.graphics.Color
 import android.os.Bundle
 import android.util.Log
 import android.view.Gravity
@@ -12,6 +13,7 @@ import android.widget.*
 import androidx.core.content.ContextCompat
 import com.sleeplock.data.SleepLockDatabase
 import com.sleeplock.data.entity.UserSettings
+import com.sleeplock.ui.settings.BlacklistManageActivity
 import com.sleeplock.util.ReminderScheduler
 import com.sleeplock.util.SchedulerManager
 import kotlinx.coroutines.*
@@ -201,6 +203,34 @@ class SettingsActivity : Activity() {
         }
         layout.addView(saveButton, createFullWidthParams().apply {
             topMargin = 50
+        })
+        
+        // 分隔线
+        layout.addView(createDivider())
+        
+        // 黑名单管理按钮
+        val blacklistButton = Button(this).apply {
+            text = "🚫 黑名单应用管理"
+            textSize = 16f
+            setTextColor(ContextCompat.getColor(this@SettingsActivity, android.R.color.white))
+            setBackgroundColor(Color.parseColor("#FF5722"))
+            gravity = Gravity.CENTER
+            setPadding(30, 20, 30, 20)
+            elevation = 2f
+            setOnClickListener {
+                val intent = Intent(this@SettingsActivity, BlacklistManageActivity::class.java)
+                startActivity(intent)
+            }
+        }
+        layout.addView(blacklistButton, createFullWidthParams())
+        
+        // 黑名单说明
+        layout.addView(TextView(this).apply {
+            text = "💡 管理黑名单应用，视频/游戏类为强制黑名单不可移除"
+            textSize = 12f
+            setTextColor(ContextCompat.getColor(this@SettingsActivity, android.R.color.darker_gray))
+            gravity = Gravity.CENTER
+            setPadding(0, 10, 0, 20)
         })
         
         // 分隔线

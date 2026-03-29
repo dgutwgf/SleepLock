@@ -91,6 +91,12 @@
             android:exported="false"
             android:label="设置" />
 
+        <!-- 黑名单管理 Activity -->
+        <activity
+            android:name=".ui.settings.BlacklistManageActivity"
+            android:exported="false"
+            android:label="黑名单管理" />
+
         <!-- 日志查看 Activity -->
         <activity
             android:name=".ui.LogViewerActivity"

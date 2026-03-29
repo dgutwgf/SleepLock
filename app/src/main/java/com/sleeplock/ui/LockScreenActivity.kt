@@ -35,7 +35,7 @@ class LockScreenActivity : Activity() {
     companion object {
         private const val TAG = "LockScreenActivity"
         private const val PREFS_NAME = "SleepLock"
-        private const val INTERCEPT_DURATION = 5 * 1000L // 拦截界面显示 5 秒
+        private const val INTERCEPT_DURATION = 5 * 1000L // 拦截界面显示 5 秒（最少）
         private const val RECHECK_DELAY = 100L // 重新检查延迟
     }
     
@@ -43,10 +43,12 @@ class LockScreenActivity : Activity() {
     private lateinit var prefs: SharedPreferences
     private lateinit var countdownTextView: TextView
     private lateinit var messageTextView: TextView
+    private lateinit var appInfoTextView: TextView
     private var countdownRunnable: Runnable? = null
     private var remainingSeconds = 5
     private var interceptedPackageName: String = ""
     private var interceptReason: String = ""
+    private var interceptStartTime: Long = 0
     
     enum class Mode {
         LOCK_PERIOD,      // 锁机时段拦截
@@ -123,12 +125,12 @@ class LockScreenActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
             setBackgroundColor(Color.parseColor("#1a1a2e"))
-            setPadding(50, 100, 50, 100)
+            setPadding(50, 80, 50, 80)
             
             // 锁定图标
             addView(TextView(this@LockScreenActivity).apply {
                 text = "⛔"
-                textSize = 100f
+                textSize = 80f
                 gravity = Gravity.CENTER
             })
             
@@ -139,68 +141,112 @@ class LockScreenActivity : Activity() {
                     Mode.MANUAL_LOCK.name -> "手动锁定中"
                     else -> "专注时间"
                 }
-                textSize = 36f
+                textSize = 32f
                 setTextColor(Color.WHITE)
                 gravity = Gravity.CENTER
-                setPadding(0, 40, 0, 20)
+                setPadding(0, 30, 0, 20)
+                setTypeface(null, android.graphics.Typeface.BOLD)
             })
             
-            // 拦截提示
-            messageTextView = TextView(this@LockScreenActivity).apply {
-                val appInfo = if (interceptedPackageName.isNotEmpty()) {
-                    "检测到：$interceptedPackageName\n原因：$interceptReason"
+            // 应用信息（突出显示）
+            appInfoTextView = TextView(this@LockScreenActivity).apply {
+                val appName = getAppName(interceptedPackageName)
+                val displayText = if (interceptedPackageName.isNotEmpty()) {
+                    "🚫 已拦截\n\n应用名称：$appName\n包名：$interceptedPackageName\n拦截原因：$interceptReason"
                 } else {
-                    "检测到非白名单应用"
+                    "🚫 已拦截非白名单应用"
                 }
-                text = "$appInfo\n\n请返回桌面或使用白名单应用"
-                textSize = 18f
-                setTextColor(Color.YELLOW)
+                text = displayText
+                textSize = 16f
+                setTextColor(Color.parseColor("#FF6B6B"))
                 gravity = Gravity.CENTER
-                setPadding(0, 30, 0, 30)
+                setPadding(30, 30, 30, 30)
+                setBackgroundColor(Color.parseColor("#2d2d44"))
             }
-            addView(messageTextView)
+            addView(appInfoTextView)
             
-            // 倒计时
+            // 倒计时（至少 5 秒）
             countdownTextView = TextView(this@LockScreenActivity).apply {
-                text = "$remainingSeconds 秒后返回桌面"
-                textSize = 28f
+                text = "请等待 $remainingSeconds 秒"
+                textSize = 24f
                 setTextColor(Color.WHITE)
                 gravity = Gravity.CENTER
-                setPadding(0, 20, 0, 40)
+                setPadding(0, 30, 0, 30)
             }
             addView(countdownTextView)
             
             // 提示信息
             addView(TextView(this@LockScreenActivity).apply {
-                text = "白名单应用包括：\n电话、短信、设置、本应用"
+                text = "⏰ 锁机时段内禁止使用娱乐应用\n请返回桌面或使用白名单应用"
                 textSize = 14f
                 setTextColor(Color.GRAY)
                 gravity = Gravity.CENTER
-                setPadding(0, 30, 0, 20)
+                setPadding(0, 20, 0, 20)
             })
             
             // 警告
             addView(TextView(this@LockScreenActivity).apply {
-                text = "⚠️ 频繁尝试打开娱乐应用将被记录"
+                text = "⚠️ 频繁尝试打开黑名单应用将被记录"
                 textSize = 12f
-                setTextColor(Color.RED)
+                setTextColor(Color.parseColor("#FF4444"))
                 gravity = Gravity.CENTER
-                setPadding(0, 20, 0, 0)
+                setPadding(0, 15, 0, 0)
             })
         }
     }
     
     /**
-     * 开始倒计时
+     * 获取应用名称
+     */
+    private fun getAppName(packageName: String): String {
+        return try {
+            val pm = packageManager
+            val appInfo = pm.getApplicationInfo(packageName, 0)
+            pm.getApplicationLabel(appInfo).toString()
+        } catch (e: Exception) {
+            packageName // 如果获取失败，返回包名
+        }
+    }
+    
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        val mode = intent.getStringExtra("mode") ?: Mode.LOCK_PERIOD.name
+        interceptedPackageName = intent.getStringExtra("package_name") ?: ""
+        interceptReason = intent.getStringExtra("reason") ?: ""
+        
+        Log.d(TAG, "🔒 拦截界面启动 - 模式：$mode, 应用：$interceptedPackageName, 原因：$interceptReason")
+        
+        prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        
+        setupWindow()
+        setContentView(createUI(mode))
+        
+        // 记录开始时间
+        interceptStartTime = System.currentTimeMillis()
+        
+        // 开始倒计时（至少 5 秒）
+        startCountdown()
+        
+        // 启动持续监控，防止应用绕过
+        startContinuousMonitor()
+    }
+    
+    /**
+     * 开始倒计时（至少 5 秒）
      */
     private fun startCountdown() {
         countdownRunnable = object : Runnable {
             override fun run() {
-                remainingSeconds--
-                countdownTextView.text = "$remainingSeconds 秒后返回桌面"
+                val elapsedSeconds = (System.currentTimeMillis() - interceptStartTime) / 1000
+                val displaySeconds = maxOf(5 - elapsedSeconds, 0)
+                remainingSeconds = displaySeconds
                 
-                if (remainingSeconds <= 0) {
-                    Log.d(TAG, "倒计时结束，返回桌面")
+                countdownTextView.text = "请等待 $displaySeconds 秒"
+                
+                // 确保至少显示 5 秒
+                if (elapsedSeconds >= 5) {
+                    Log.d(TAG, "倒计时结束（已显示 ${elapsedSeconds}秒），返回桌面并清除应用")
+                    forceStopInterceptedApp()
                     returnToHome()
                     return
                 }
@@ -213,22 +259,59 @@ class LockScreenActivity : Activity() {
     }
     
     /**
+     * 强制停止被拦截的应用（清除后台）
+     */
+    private fun forceStopInterceptedApp() {
+        if (interceptedPackageName.isEmpty()) return
+        
+        try {
+            val activityManager = getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+            
+            // 方法 1: 发送强制停止广播
+            try {
+                val forceStopIntent = Intent("android.intent.action.FORCE_STOP_PACKAGE")
+                forceStopIntent.setPackage("com.android.settings")
+                forceStopIntent.putExtra("package", interceptedPackageName)
+                forceStopIntent.addFlags(Intent.FLAG_RECEIVER_FOREGROUND)
+                sendBroadcast(forceStopIntent)
+                Log.d(TAG, "✅ 发送强制停止广播：$interceptedPackageName")
+            } catch (e: Exception) {
+                Log.w(TAG, "⚠️ 强制停止广播失败：${e.message}")
+            }
+            
+            // 方法 2: 杀死后台进程
+            try {
+                activityManager.killBackgroundProcesses(interceptedPackageName)
+                Log.d(TAG, "✅ 杀死后台进程：$interceptedPackageName")
+            } catch (e: Exception) {
+                Log.w(TAG, "⚠️ 杀死后台进程失败：${e.message}")
+            }
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ 强制停止应用失败：${e.message}", e)
+        }
+    }
+    
+    /**
      * 启动持续监控，防止应用在拦截期间启动
      */
     private fun startContinuousMonitor() {
         handler.postDelayed(object : Runnable {
             override fun run() {
-                if (!isFinishing && remainingSeconds > 0) {
-                    // 确保拦截界面始终在最上层
-                    window.decorView.systemUiVisibility = (
-                        View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-                        or View.SYSTEM_UI_FLAG_FULLSCREEN
-                        or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-                        or View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-                        or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
-                        or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-                    )
-                    handler.postDelayed(this, RECHECK_DELAY)
+                if (!isFinishing) {
+                    val elapsedSeconds = (System.currentTimeMillis() - interceptStartTime) / 1000
+                    if (elapsedSeconds < 5) {
+                        // 确保拦截界面始终在最上层（至少 5 秒）
+                        window.decorView.systemUiVisibility = (
+                            View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                            or View.SYSTEM_UI_FLAG_FULLSCREEN
+                            or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                            or View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                            or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                            or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                        )
+                        handler.postDelayed(this, RECHECK_DELAY)
+                    }
                 }
             }
         }, RECHECK_DELAY)

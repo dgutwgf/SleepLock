@@ -257,15 +257,25 @@ class MonitorAccessibilityService : AccessibilityService() {
     
     /**
      * 判断是否为黑名单应用
-     * 包括：明确黑名单 + 关键词匹配
+     * 包括：明确黑名单 + 关键词匹配 + 数据库自定义黑名单
      */
-    private fun isBlacklistedApp(packageName: String): Boolean {
-        // 1. 检查是否在明确黑名单中
+    private suspend fun isBlacklistedApp(packageName: String): Boolean {
+        // 1. 检查是否在明确黑名单中（强制黑名单）
         if (packageName in entertainmentBlacklist) {
             return true
         }
         
-        // 2. 关键词匹配（覆盖更多变体）
+        // 2. 检查数据库中的自定义黑名单
+        try {
+            val db = SleepLockDatabase.getDatabase(this)
+            if (db.appBlacklistDao().isBlacklisted(packageName)) {
+                return true
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "查询自定义黑名单失败", e)
+        }
+        
+        // 3. 关键词匹配（覆盖更多变体）
         val blacklistKeywords = listOf(
             // 游戏类
             "tmgp", "game", "gaming", "playgame", "mobilegame",
