@@ -1,7 +1,9 @@
 package com.sleeplock.ui
 
 import android.app.Activity
+import android.app.AlertDialog
 import android.app.TimePickerDialog
+import android.content.Context
 import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
@@ -17,6 +19,7 @@ import com.sleeplock.ui.settings.BlacklistManageActivity
 import com.sleeplock.util.ReminderScheduler
 import com.sleeplock.util.SchedulerManager
 import kotlinx.coroutines.*
+import java.util.Calendar
 
 /**
  * 设置界面
@@ -391,6 +394,25 @@ class SettingsActivity : Activity() {
         ioScope.launch {
             try {
                 val db = SleepLockDatabase.getDatabase(this@SettingsActivity)
+                val prefs = getSharedPreferences("SleepLock", Context.MODE_PRIVATE)
+                
+                // 检查是否在锁机时段
+                val isLockActive = prefs.getBoolean("is_lock_active", false)
+                val testMode = prefs.getBoolean("test_mode", false)
+                val isInLockPeriod = checkIfInLockPeriod()
+                
+                // 锁机时段内禁止修改锁机/解锁时间（测试模式除外）
+                if (isLockActive && isInLockPeriod && !testMode) {
+                    withContext(Dispatchers.Main) {
+                        AlertDialog.Builder(this@SettingsActivity)
+                            .setTitle("⚠️ 无法修改")
+                            .setMessage("锁机时段内无法修改锁机/解锁时间，请在解锁时段修改。")
+                            .setPositiveButton("知道了", null)
+                            .show()
+                    }
+                    Log.w(TAG, "锁机时段内尝试修改设置被阻止")
+                    return@launch
+                }
                 
                 val updatedSettings = settings?.copy(
                     lockTime = lockTimeButton.text.toString(),
@@ -445,6 +467,34 @@ class SettingsActivity : Activity() {
                     ).show()
                 }
             }
+        }
+    }
+    
+    /**
+     * 检查当前是否在锁机时段
+     */
+    private suspend fun checkIfInLockPeriod(): Boolean {
+        return try {
+            val db = SleepLockDatabase.getDatabase(this)
+            val currentSettings = db.userSettingsDao().getSettings() ?: return false
+            
+            val currentTime = Calendar.getInstance()
+            val lockTime = currentSettings.lockTime.split(":")
+            val unlockTime = currentSettings.unlockTime.split(":")
+            
+            val currentMinutes = currentTime.get(Calendar.HOUR_OF_DAY) * 60 + currentTime.get(Calendar.MINUTE)
+            val lockMinutes = lockTime[0].toInt() * 60 + lockTime[1].toInt()
+            val unlockMinutes = unlockTime[0].toInt() * 60 + unlockTime[1].toInt()
+            
+            // 处理跨夜情况
+            if (lockMinutes > unlockMinutes) {
+                currentMinutes >= lockMinutes || currentMinutes < unlockMinutes
+            } else {
+                currentMinutes >= lockMinutes && currentMinutes < unlockMinutes
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "检查锁机时段失败", e)
+            false
         }
     }
 }
