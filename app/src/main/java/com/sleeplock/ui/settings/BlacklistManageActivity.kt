@@ -291,7 +291,7 @@ class BlacklistManageActivity : Activity() {
                             it
                         }
                     }
-                    adapter.notifyDataSetChanged()
+                    adapter?.notifyDataSetChanged()
                     Toast.makeText(this@BlacklistManageActivity, "已添加：$appName", Toast.LENGTH_SHORT).show()
                 }
             } catch (e: Exception) {
@@ -327,7 +327,7 @@ class BlacklistManageActivity : Activity() {
                             it
                         }
                     }
-                    adapter.notifyDataSetChanged()
+                    adapter?.notifyDataSetChanged()
                     Toast.makeText(this@BlacklistManageActivity, "已移除：$appName", Toast.LENGTH_SHORT).show()
                 }
             } catch (e: Exception) {
