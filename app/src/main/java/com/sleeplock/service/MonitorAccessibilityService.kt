@@ -298,8 +298,11 @@ class MonitorAccessibilityService : AccessibilityService() {
      * 包括：明确黑名单 + 关键词匹配 + 数据库自定义黑名单
      */
     private suspend fun isBlacklistedApp(packageName: String): Boolean {
+        Log.d(TAG, "🔍 检查应用是否在黑名单：$packageName")
+        
         // 1. 检查是否在明确黑名单中（强制黑名单）
         if (packageName in entertainmentBlacklist) {
+            Log.w(TAG, "⚠️ 明确黑名单拦截：$packageName")
             return true
         }
         
@@ -309,6 +312,13 @@ class MonitorAccessibilityService : AccessibilityService() {
             val isCustomBlacklisted = db.appBlacklistDao().isBlacklisted(packageName)
             if (isCustomBlacklisted) {
                 Log.w(TAG, "⚠️ 数据库自定义黑名单拦截：$packageName")
+                // 获取黑名单详情
+                try {
+                    val item = db.appBlacklistDao().getByPackageName(packageName)
+                    Log.w(TAG, "   黑名单记录：appName=${item?.appName}, isCustom=${item?.isCustom}, addedTime=${item?.addedTime}")
+                } catch (e: Exception) {
+                    Log.w(TAG, "   无法获取黑名单详情：${e.message}")
+                }
                 return true
             }
         } catch (e: Exception) {
