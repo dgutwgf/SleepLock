@@ -55,6 +55,7 @@ class BlacklistManageActivity : Activity() {
     private val ioScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private lateinit var appsListView: ListView
     private lateinit var loadingView: View
+    private lateinit var addButton: Button
     private var installedApps: List<AppInfo> = emptyList()
     private var blacklistedPackages: MutableSet<String> = mutableSetOf()
     private var adapter: AppAdapter? = null
@@ -114,17 +115,23 @@ class BlacklistManageActivity : Activity() {
             setPadding(0, 10, 0, 20)
         })
         
-        // 添加按钮
-        layout.addView(Button(this).apply {
+        // 添加按钮（初始禁用，数据加载完成后启用）
+        val addButton = Button(this).apply {
             text = "+ 添加应用到黑名单"
             textSize = 16f
             setBackgroundColor(Color.parseColor("#4CAF50"))
             setTextColor(Color.WHITE)
             setPadding(30, 20, 30, 20)
+            isEnabled = false  // 初始禁用
+            alpha = 0.5f
             setOnClickListener {
                 showAddAppDialog()
             }
-        })
+        }
+        layout.addView(addButton)
+        
+        // 保存按钮引用，数据加载完成后启用
+        this.addButton = addButton
         
         // 加载提示
         loadingView = TextView(this).apply {
@@ -195,6 +202,8 @@ class BlacklistManageActivity : Activity() {
                     appsListView.adapter = adapter
                     loadingView.visibility = View.GONE
                     appsListView.visibility = View.VISIBLE
+                    addButton.isEnabled = true  // 启用添加按钮
+                    addButton.alpha = 1.0f
                     adapter!!.notifyDataSetChanged()
                     
                     val count = installedApps.count { it.isBlacklisted }
@@ -239,7 +248,7 @@ class BlacklistManageActivity : Activity() {
      * 显示添加应用对话框
      */
     private fun showAddAppDialog() {
-        if (adapter == null) {
+        if (installedApps.isEmpty()) {
             Toast.makeText(this, "数据加载中，请稍后", Toast.LENGTH_SHORT).show()
             return
         }
