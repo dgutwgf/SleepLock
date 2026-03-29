@@ -172,8 +172,13 @@ class MonitorService : Service() {
                 val testMode = prefs.getBoolean("test_mode", false)
                 val isLockActive = prefs.getBoolean(KEY_LOCK_ACTIVE, false)
                 
-                // 必须同时满足：在锁机时段内 + 锁机服务已激活
-                val shouldBeLocked = isInTimePeriod && (isLockActive || testMode)
+                // 测试模式：忽略时间段，直接锁定
+                // 正常模式：必须同时满足：在锁机时段内 + 锁机服务已激活
+                val shouldBeLocked = if (testMode) {
+                    true  // 测试模式下始终锁定
+                } else {
+                    isInTimePeriod && isLockActive
+                }
                 
                 // 更新无障碍服务状态
                 mainHandler.post {
