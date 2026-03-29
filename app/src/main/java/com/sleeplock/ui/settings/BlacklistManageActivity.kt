@@ -105,9 +105,8 @@ class BlacklistManageActivity : Activity() {
             "com.twitter.android",       // Twitter
             "com.snapchat.android",      // Snapchat
             "com.discord",               // Discord
-            "com.reddit.frontpage",      // Reddit
-            "com.tencent.wework",        // 企业微信
-            "com.dingtalk.enterprise"    // 钉钉
+            "com.reddit.frontpage"       // Reddit
+            // 微信、企业微信、飞书、钉钉等办公软件已移除 ✅
         )
         
         // 强制黑名单（不可移除）- 阅读/小说类
@@ -173,8 +172,8 @@ class BlacklistManageActivity : Activity() {
             "aweme", "douyin", "kuaishou", "nebula",
             "qqlive", "aiqiyi", "youku", "bilibili", "blbl",
             "youtube", "youtubemusic",
-            // 社交类
-            "weibo", "social", "shejiao",
+            // 社交娱乐类（排除办公）
+            "weibo", "shejiao",
             "xiaohongshu", "red", "xhs",
             "zhihu", "douban", "coolapk",
             "tieba", "baidutieba",
@@ -193,6 +192,7 @@ class BlacklistManageActivity : Activity() {
             // 直播类
             "live", "zhibo", "douyu", "huya", "huajiao", "inke",
             "karaoke", "changba", "quanminkge"
+            // 注意：排除 social（包含企业微信等办公应用）
         )
     }
     

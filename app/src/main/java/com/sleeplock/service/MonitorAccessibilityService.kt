@@ -249,17 +249,49 @@ class MonitorAccessibilityService : AccessibilityService() {
             return
         }
         
+        // 检查是否为系统应用（系统应用不拦截）
+        if (isSystemApp(packageName)) {
+            Log.d(TAG, "✅ 系统应用，放行：$packageName")
+            return
+        }
+        
         // 检查是否在黑名单中（严格拦截）
         val isBlacklisted = isBlacklistedApp(packageName)
         if (isBlacklisted) {
             Log.w(TAG, "🚫 黑名单应用，立即拦截：$packageName")
-            LogManager.intercept("AppIntercept", packageName, "黑名单应用")
-            interceptApp(packageName, "黑名单应用")
+            val appName = getAppName(packageName)
+            LogManager.intercept("AppIntercept", packageName, "黑名单应用 - $appName")
+            interceptApp(packageName, "黑名单应用", appName)
             return
         }
         
         // 其他应用：不在黑名单中，放行
         Log.d(TAG, "✅ 非黑名单应用，放行：$packageName")
+    }
+    
+    /**
+     * 判断是否为系统应用
+     */
+    private fun isSystemApp(packageName: String): Boolean {
+        return try {
+            val appInfo = packageManager.getApplicationInfo(packageName, 0)
+            (appInfo.flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM) != 0 ||
+            (appInfo.flags and android.content.pm.ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0
+        } catch (e: Exception) {
+            false
+        }
+    }
+    
+    /**
+     * 获取应用名称
+     */
+    private fun getAppName(packageName: String): String {
+        return try {
+            val appInfo = packageManager.getApplicationInfo(packageName, 0)
+            packageManager.getApplicationLabel(appInfo).toString()
+        } catch (e: Exception) {
+            packageName
+        }
     }
     
     /**
@@ -378,7 +410,7 @@ class MonitorAccessibilityService : AccessibilityService() {
     /**
      * 拦截应用 - 无冷却时间，持续拦截
      */
-    private fun interceptApp(packageName: String, reason: String) {
+    private fun interceptApp(packageName: String, reason: String, appName: String = "") {
         // 防止重复拦截
         if (isIntercepting) {
             Log.d(TAG, "⚠️ 正在拦截中，跳过：$packageName")
@@ -390,10 +422,14 @@ class MonitorAccessibilityService : AccessibilityService() {
         lastInterceptTime = now
         interceptCount++
         
-        Log.w(TAG, "🚫 拦截 #${interceptCount} - $packageName ($reason)")
+        val displayName = appName.ifEmpty { packageName }
+        Log.w(TAG, "🚫 拦截 #${interceptCount} - $displayName ($reason)")
         
-        // 记录拦截日志
-        LogManager.intercept("AppIntercept", packageName, reason)
+        // 记录拦截日志（包含应用名称）
+        LogManager.intercept("AppIntercept", packageName, "$reason - $displayName")
+        
+        // 更新统计数据
+        updateInterceptStats(packageName, appName)
         
         // 方法 1: 0.3 秒后强制停止应用（清除后台）
         mainHandler.postDelayed({
@@ -412,6 +448,7 @@ class MonitorAccessibilityService : AccessibilityService() {
                     putExtra("mode", LockScreenActivity.Mode.LOCK_PERIOD.name)
                     putExtra("package_name", packageName)
                     putExtra("reason", reason)
+                    putExtra("app_name", displayName)
                 }
                 startActivity(intent)
                 Log.d(TAG, "✅ 已显示拦截界面")
@@ -442,6 +479,67 @@ class MonitorAccessibilityService : AccessibilityService() {
         }, 3000)
         
         // 记录违规日志
+        serviceScope.launch {
+            try {
+                val db = SleepLockDatabase.getDatabase(this@MonitorAccessibilityService)
+                
+                // 记录到 ViolationLog
+                val violationLog = com.sleeplock.data.entity.ViolationLog(
+                    packageName = packageName,
+                    appName = appName.ifEmpty { packageName },
+                    timestamp = System.currentTimeMillis(),
+                    reason = reason
+                )
+                db.violationLogDao().insert(violationLog)
+            } catch (e: Exception) {
+                Log.e(TAG, "记录违规日志失败", e)
+            }
+        }
+    }
+    
+    /**
+     * 更新拦截统计数据
+     */
+    private fun updateInterceptStats(packageName: String, appName: String) {
+        serviceScope.launch {
+            try {
+                val db = SleepLockDatabase.getDatabase(this@MonitorAccessibilityService)
+                val today = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+                    .format(java.util.Date())
+                
+                // 获取今日统计
+                var stats = db.dailyLockStatsDao().getByDate(today)
+                
+                if (stats == null) {
+                    // 创建新统计
+                    stats = com.sleeplock.data.entity.DailyLockStats(
+                        date = today,
+                        lockStartTime = System.currentTimeMillis(),
+                        interceptCount = 1,
+                        topBlockedApps = "{\"$packageName\":1}"
+                    )
+                    db.dailyLockStatsDao().insert(stats)
+                } else {
+                    // 更新统计
+                    stats = stats.copy(
+                        interceptCount = stats.interceptCount + 1,
+                        unlockTime = System.currentTimeMillis(),
+                        lockDuration = (System.currentTimeMillis() - stats.lockStartTime) / 1000
+                    )
+                    db.dailyLockStatsDao().update(stats)
+                }
+                
+                Log.d(TAG, "📊 拦截统计已更新：$today, 次数：${stats.interceptCount}")
+            } catch (e: Exception) {
+                Log.e(TAG, "更新拦截统计失败", e)
+            }
+        }
+    }
+    
+    /**
+     * 记录违规日志
+     */
+    private fun recordViolationLog(packageName: String, appName: String, reason: String) {
         serviceScope.launch {
             try {
                 val db = SleepLockDatabase.getDatabase(this@MonitorAccessibilityService)
