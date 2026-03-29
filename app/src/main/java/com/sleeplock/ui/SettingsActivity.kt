@@ -28,9 +28,11 @@ class SettingsActivity : Activity() {
     
     companion object {
         private const val TAG = "SettingsActivity"
+        private const val REQUEST_CODE_CONFIRM_DEVICE_CREDENTIALS = 1001
     }
     
     private val ioScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private var isWaitingForVerification = false
     
     private lateinit var lockTimeButton: Button
     private lateinit var unlockTimeButton: Button
@@ -202,7 +204,7 @@ class SettingsActivity : Activity() {
             gravity = Gravity.CENTER
             setPadding(30, 25, 30, 25)
             elevation = 4f
-            setOnClickListener { saveSettings() }
+            setOnClickListener { verifyAndSaveSettings() }
         }
         layout.addView(saveButton, createFullWidthParams().apply {
             topMargin = 50
@@ -388,9 +390,57 @@ class SettingsActivity : Activity() {
     }
     
     /**
-     * 保存设置
+     * 验证设备密码后保存设置
      */
-    private fun saveSettings() {
+    private fun verifyAndSaveSettings() {
+        val devicePolicyManager = getSystemService(Context.DEVICE_POLICY_SERVICE) as android.app.admin.DevicePolicyManager
+        
+        // 检查是否需要验证（锁机时段内修改关键设置需要验证）
+        val prefs = getSharedPreferences("SleepLock", Context.MODE_PRIVATE)
+        val isLockActive = prefs.getBoolean("is_lock_active", false)
+        val isInLockPeriod = runBlocking { checkIfInLockPeriod() }
+        
+        if (isLockActive && isInLockPeriod) {
+            // 需要设备密码验证
+            if (devicePolicyManager.isDeviceLocked) {
+                // 设备已锁定，要求解锁
+                val confirmIntent = devicePolicyManager.createConfirmDeviceCredentialIntent(
+                    "修改设置验证",
+                    "请输入设备密码以确认修改锁机设置"
+                )
+                if (confirmIntent != null) {
+                    isWaitingForVerification = true
+                    startActivityForResult(confirmIntent, REQUEST_CODE_CONFIRM_DEVICE_CREDENTIALS)
+                    return
+                }
+            }
+        }
+        
+        // 不需要验证或验证已通过，直接保存
+        saveSettingsInternal()
+    }
+    
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        
+        if (requestCode == REQUEST_CODE_CONFIRM_DEVICE_CREDENTIALS) {
+            isWaitingForVerification = false
+            if (resultCode == RESULT_OK) {
+                // 验证成功，保存设置
+                Log.d(TAG, "设备密码验证成功")
+                saveSettingsInternal()
+            } else {
+                // 验证失败
+                Log.w(TAG, "设备密码验证失败")
+                Toast.makeText(this, "❌ 验证失败，无法修改设置", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+    
+    /**
+     * 内部保存设置方法
+     */
+    private fun saveSettingsInternal() {
         ioScope.launch {
             try {
                 val db = SleepLockDatabase.getDatabase(this@SettingsActivity)

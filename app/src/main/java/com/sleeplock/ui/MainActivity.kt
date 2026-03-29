@@ -18,6 +18,8 @@ import com.sleeplock.data.SleepLockDatabase
 import com.sleeplock.data.entity.UserSettings
 import com.sleeplock.service.LockService
 import com.sleeplock.util.SchedulerManager
+import kotlinx.coroutines.runBlocking
+import java.util.Calendar
 import com.sleeplock.util.HolidayManager
 import com.sleeplock.util.PermissionChecker
 import kotlinx.coroutines.*
@@ -580,6 +582,22 @@ class MainActivity : Activity() {
             }
         }
         
+        // 检查是否允许关闭锁机服务
+        val prefs = getSharedPreferences("SleepLock", Context.MODE_PRIVATE)
+        val isTestMode = prefs.getBoolean("test_mode", false)
+        val isInLockPeriod = checkIfInLockPeriod()
+        
+        // 非测试模式下，在锁机时段内禁止关闭锁机服务
+        if (!isTestMode && isInLockPeriod) {
+            AlertDialog.Builder(this)
+                .setTitle("⚠️ 无法停止")
+                .setMessage("锁机时段内无法停止锁机服务，请在解锁时段停止。")
+                .setPositiveButton("知道了", null)
+                .show()
+            Log.w(TAG, "锁机时段内尝试停止锁机服务被阻止")
+            return
+        }
+        
         val schedulerManager = SchedulerManager(this)
         schedulerManager.cancelAllTasks()
         
@@ -600,6 +618,34 @@ class MainActivity : Activity() {
         stopButton.alpha = 0.5f
         Toast.makeText(this, "锁机服务已停止", Toast.LENGTH_SHORT).show()
         Log.d(TAG, "锁机服务已停止")
+    }
+    
+    /**
+     * 检查当前是否在锁机时段
+     */
+    private fun checkIfInLockPeriod(): Boolean {
+        return try {
+            val db = SleepLockDatabase.getDatabase(this)
+            val settings = runBlocking { db.userSettingsDao().getSettings() } ?: return false
+            
+            val currentTime = Calendar.getInstance()
+            val lockTime = settings.lockTime.split(":")
+            val unlockTime = settings.unlockTime.split(":")
+            
+            val currentMinutes = currentTime.get(Calendar.HOUR_OF_DAY) * 60 + currentTime.get(Calendar.MINUTE)
+            val lockMinutes = lockTime[0].toInt() * 60 + lockTime[1].toInt()
+            val unlockMinutes = unlockTime[0].toInt() * 60 + unlockTime[1].toInt()
+            
+            // 处理跨夜情况
+            if (lockMinutes > unlockMinutes) {
+                currentMinutes >= lockMinutes || currentMinutes < unlockMinutes
+            } else {
+                currentMinutes >= lockMinutes && currentMinutes < unlockMinutes
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "检查锁机时段失败", e)
+            false
+        }
     }
     
     /**
