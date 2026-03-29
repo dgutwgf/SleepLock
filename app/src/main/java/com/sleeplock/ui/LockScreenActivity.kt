@@ -48,6 +48,7 @@ class LockScreenActivity : Activity() {
     private var remainingSeconds = 5
     private var interceptedPackageName: String = ""
     private var interceptReason: String = ""
+    private var interceptedAppName: String = ""
     private var interceptStartTime: Long = 0
     
     enum class Mode {
@@ -130,7 +131,7 @@ class LockScreenActivity : Activity() {
             
             // 应用信息（突出显示）
             appInfoTextView = TextView(this@LockScreenActivity).apply {
-                val displayName = if (appName.isNotEmpty()) appName else getAppName(interceptedPackageName)
+                val displayName = if (interceptedAppName.isNotEmpty()) interceptedAppName else getAppName(interceptedPackageName)
                 val displayText = if (interceptedPackageName.isNotEmpty()) {
                     "🚫 已拦截\n\n应用名称：$displayName\n包名：$interceptedPackageName\n拦截原因：$interceptReason"
                 } else {
@@ -193,9 +194,9 @@ class LockScreenActivity : Activity() {
         val mode = intent.getStringExtra("mode") ?: Mode.LOCK_PERIOD.name
         interceptedPackageName = intent.getStringExtra("package_name") ?: ""
         interceptReason = intent.getStringExtra("reason") ?: ""
-        val appName = intent.getStringExtra("app_name") ?: ""
+        interceptedAppName = intent.getStringExtra("app_name") ?: ""
         
-        Log.d(TAG, "🔒 拦截界面启动 - 模式：$mode, 应用：$interceptedPackageName, 名称：$appName, 原因：$interceptReason")
+        Log.d(TAG, "🔒 拦截界面启动 - 模式：$mode, 应用：$interceptedPackageName, 名称：$interceptedAppName, 原因：$interceptReason")
         
         prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         

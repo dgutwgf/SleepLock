@@ -543,10 +543,11 @@ class MonitorAccessibilityService : AccessibilityService() {
         serviceScope.launch {
             try {
                 val db = SleepLockDatabase.getDatabase(this@MonitorAccessibilityService)
+                val displayName = appName.ifEmpty { packageName }
                 db.violationLogDao().insert(
                     com.sleeplock.data.entity.ViolationLog(
                         type = "APP_INTERCEPT",
-                        description = "尝试打开$reason：$packageName (拦截 #${interceptCount})"
+                        description = "尝试打开$reason：$displayName (拦截 #${interceptCount})"
                     )
                 )
             } catch (e: Exception) {
