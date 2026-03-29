@@ -48,6 +48,10 @@
     <!-- 网络 -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    
+    <!-- 应用管理 -->
+    <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
+    <uses-permission android:name="android.permission.FORCE_STOP_PACKAGES" />
 
     <application
         android:name=".SleepLockApplication"

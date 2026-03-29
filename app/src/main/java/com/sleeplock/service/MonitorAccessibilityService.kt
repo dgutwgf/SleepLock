@@ -225,7 +225,8 @@ class MonitorAccessibilityService : AccessibilityService() {
     }
     
     /**
-     * 检查并拦截应用 - 无冷却时间，实时拦截
+     * 检查并拦截应用 - 纯黑名单模式
+     * 只拦截黑名单中的应用，其他应用全部放行
      */
     private suspend fun checkAndInterceptInternal(packageName: String) {
         // 详细记录每次检查
@@ -237,73 +238,126 @@ class MonitorAccessibilityService : AccessibilityService() {
             return
         }
         
-        // 检查是否在基础白名单
+        // 检查是否在基础白名单（系统必要应用，直接放行）
         if (packageName in baseWhitelist) {
-            Log.d(TAG, "✅ 白名单应用：$packageName")
-            LogManager.d(ExecutionLog.LogCategory.INTERCEPT, "AppCheck", "✅ 白名单应用：$packageName")
+            Log.d(TAG, "✅ 系统白名单应用：$packageName")
             return
         }
         
-        // 检查是否在娱乐黑名单（严格拦截）
-        val isEntertainmentApp = isEntertainmentApp(packageName)
-        if (isEntertainmentApp) {
-            Log.w(TAG, "🚫 娱乐应用，立即拦截：$packageName")
-            LogManager.intercept("AppIntercept", packageName, "娱乐应用")
-            interceptApp(packageName, "娱乐应用")
+        // 检查是否在黑名单中（严格拦截）
+        val isBlacklisted = isBlacklistedApp(packageName)
+        if (isBlacklisted) {
+            Log.w(TAG, "🚫 黑名单应用，立即拦截：$packageName")
+            LogManager.intercept("AppIntercept", packageName, "黑名单应用")
+            interceptApp(packageName, "黑名单应用")
             return
         }
         
-        // 检查用户白名单
-        try {
-            val db = SleepLockDatabase.getDatabase(this)
-            val isWhitelisted = db.appWhitelistDao().isWhitelisted(packageName)
-            
-            if (isWhitelisted) {
-                Log.d(TAG, "✅ 用户白名单应用：$packageName")
-                LogManager.d(ExecutionLog.LogCategory.INTERCEPT, "AppCheck", "✅ 用户白名单应用：$packageName")
-                return
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "查询白名单失败", e)
-        }
-        
-        // 其他应用：根据设置决定是否拦截
-        // 默认策略：非白名单应用都拦截
-        Log.w(TAG, "⚠️ 非白名单应用，立即拦截：$packageName")
-        LogManager.intercept("AppIntercept", packageName, "非白名单应用")
-        interceptApp(packageName, "非白名单应用")
+        // 其他应用：不在黑名单中，放行
+        Log.d(TAG, "✅ 非黑名单应用，放行：$packageName")
     }
     
     /**
-     * 判断是否为娱乐应用
+     * 判断是否为黑名单应用
+     * 包括：明确黑名单 + 关键词匹配
      */
-    private fun isEntertainmentApp(packageName: String): Boolean {
-        // 检查是否在娱乐黑名单
+    private fun isBlacklistedApp(packageName: String): Boolean {
+        // 1. 检查是否在明确黑名单中
         if (packageName in entertainmentBlacklist) {
             return true
         }
         
-        // 检查包名关键词
-        val entertainmentKeywords = listOf(
-            "tmgp",      // 腾讯游戏
-            "game",      // 游戏
-            "video",     // 视频
-            "movie",     // 电影
-            "music",     // 音乐
-            "live",      // 直播
-            "novel",     // 小说
-            "reader",    // 阅读器（娱乐类）
-            "bilibili",  // B 站
-            "douyin",    // 抖音
-            "kuaishou",  // 快手
-            "weibo",     // 微博
-            "instagram", // Instagram
-            "facebook",  // Facebook
-            "twitter",   // Twitter
-            "tiktok"     // TikTok
+        // 2. 关键词匹配（覆盖更多变体）
+        val blacklistKeywords = listOf(
+            // 游戏类
+            "tmgp", "game", "gaming", "playgame", "mobilegame",
+            "miHoYo", "mihaoyou", "yuanshen", "genshin", "honkai",
+            "netease", "wangyigame", "tencentgame", "txgame",
+            // 视频类
+            "video", "movie", "tv", "film", "shortvideo", "shipin",
+            "aweme", "douyin", "kuaishou", "nebula",
+            "qqlive", "aiqiyi", "youku", "bilibili", "blbl",
+            "youtube", "youtubemusic",
+            // 社交类
+            "weibo", "social", "shejiao",
+            "xiaohongshu", "red", "xhs",
+            "zhihu", "douban", "coolapk",
+            "tieba", "baidutieba",
+            "instagram", "facebook", "twitter", "snapchat",
+            "tiktok", "douyin",
+            // 音乐类
+            "music", "yinyue", "wangyiyunyinyue", "qqmusic",
+            "kugou", "kuwo", "xiami",
+            // 阅读/小说类
+            "reader", "novel", "book", "yuedu", "xiaoshuo",
+            "qidian", "qqreader", "fanqie", "qimao",
+            // 直播类
+            "live", "zhibo", "douyu", "huya", "huajiao", "inke",
+            "karaoke", "changba", "quanminkge",
+            // 购物类
+            "taobao", "jd", "jingdong", "pinduoduo", "pdd",
+            "vip", "weipinhui", "xianyu", "zhuanzhuan",
+            // 浏览器类
+            "browser", "liulanqi", "chrome", "firefox", "opera",
+            "ucbrowser", "qqbrowser", "baidubrowser",
+            "edge", "safari", "samsungbrowser",
+            // 新闻类
+            "news", "xinwen", "toutiao", "jinritoutiao",
+            "wangyixinwen", "tencentnews", "ifeng", "sohu",
+            // 图片/美颜类
+            "camera", "photo", "meiyang", "xiangji",
+            "meitu", "qingyan", "snow", "b612",
+            // 支付/理财（娱乐功能）
+            "alipay", "zhifubao", "wealth", "licai",
+            // 外卖/到店（娱乐性质）
+            "meituan", "eleme", "dianping",
+            // 旅游/出行（娱乐性质）
+            "travel", "lvxing", "ctrip", "qunar", "fliggy",
+            // 输入法（带娱乐功能）
+            "input", "shuru", "keyboard", "emoji",
+            // 社区/论坛
+            "community", "luntan", "shequ",
+            // 体育/彩票
+            "sport", "tiyu", "lottery", "caipiao",
+            // 其他娱乐
+            "entertainment", "yule", "fun", "play",
+            "anime", "comic", "manga", "dongman"
         )
         
-        return entertainmentKeywords.any { it in packageName.lowercase() }
+        val lowerPackageName = packageName.lowercase()
+        return blacklistKeywords.any { it in lowerPackageName }
+    }
+    
+    /**
+     * 强制停止应用（清除后台）
+     */
+    private fun forceStopApp(packageName: String) {
+        try {
+            val activityManager = getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+            
+            // 方法 1: 发送强制停止广播
+            try {
+                val forceStopIntent = Intent("android.intent.action.FORCE_STOP_PACKAGE")
+                forceStopIntent.setPackage("com.android.settings")
+                forceStopIntent.putExtra("package", packageName)
+                forceStopIntent.addFlags(Intent.FLAG_RECEIVER_FOREGROUND)
+                sendBroadcast(forceStopIntent)
+                Log.d(TAG, "✅ 发送强制停止广播：$packageName")
+            } catch (e: Exception) {
+                Log.w(TAG, "⚠️ 强制停止广播失败：${e.message}")
+            }
+            
+            // 方法 2: 杀死后台进程
+            try {
+                activityManager.killBackgroundProcesses(packageName)
+                Log.d(TAG, "✅ 杀死后台进程：$packageName")
+            } catch (e: Exception) {
+                Log.w(TAG, "⚠️ 杀死后台进程失败：${e.message}")
+            }
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ 强制停止应用失败：${e.message}", e)
+        }
     }
     
     /**
@@ -326,7 +380,13 @@ class MonitorAccessibilityService : AccessibilityService() {
         // 记录拦截日志
         LogManager.intercept("AppIntercept", packageName, reason)
         
-        // 方法 1: 立即启动拦截界面（0 延迟）
+        // 方法 1: 0.3 秒后强制停止应用（清除后台）
+        mainHandler.postDelayed({
+            forceStopApp(packageName)
+            Log.d(TAG, "🛑 已强制停止应用：$packageName")
+        }, 300)
+        
+        // 方法 2: 立即启动拦截界面
         mainHandler.post {
             try {
                 val intent = Intent(this@MonitorAccessibilityService, LockScreenActivity::class.java).apply {
@@ -346,13 +406,13 @@ class MonitorAccessibilityService : AccessibilityService() {
             }
         }
         
-        // 方法 2: 0.5 秒后模拟 Home 键（更快响应）
+        // 方法 3: 0.5 秒后模拟 Home 键（更快响应）
         mainHandler.postDelayed({
             performGlobalAction(GLOBAL_ACTION_HOME)
             Log.d(TAG, "🏠 已返回桌面")
         }, 500)
         
-        // 方法 3: 1.5 秒后再次确保
+        // 方法 4: 1.5 秒后再次确保
         mainHandler.postDelayed({
             if (isLockPeriod) {
                 performGlobalAction(GLOBAL_ACTION_HOME)
@@ -360,7 +420,7 @@ class MonitorAccessibilityService : AccessibilityService() {
             }
         }, 1500)
         
-        // 方法 4: 3 秒后重置拦截状态
+        // 方法 5: 3 秒后重置拦截状态
         mainHandler.postDelayed({
             isIntercepting = false
             Log.d(TAG, "🔄 拦截状态已重置")
