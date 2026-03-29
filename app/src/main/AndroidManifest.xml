@@ -97,6 +97,12 @@
             android:exported="false"
             android:label="黑名单管理" />
 
+        <!-- 锁机统计 Activity -->
+        <activity
+            android:name=".ui.stats.LockStatsActivity"
+            android:exported="false"
+            android:label="锁机统计" />
+
         <!-- 日志查看 Activity -->
         <activity
             android:name=".ui.LogViewerActivity"

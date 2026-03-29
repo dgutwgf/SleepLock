@@ -33,22 +33,167 @@ class BlacklistManageActivity : Activity() {
         
         // 强制黑名单（不可移除）- 视频类
         val FORCE_BLACKLIST_VIDEO = setOf(
-            "com.tencent.qqlive", "com.qiyi.video", "com.youku.phone",
-            "tv.danmaku.bili", "com.google.android.youtube",
-            "com.ss.android.ugc.aweme", "com.kuaishou.nebula"
+            "com.tencent.qqlive",      // 腾讯视频
+            "com.qiyi.video",          // 爱奇艺
+            "com.youku.phone",         // 优酷
+            "tv.danmaku.bili",         // 哔哩哔哩
+            "tv.danmaku.bili",         // 哔哩哔哩
+            "com.google.android.youtube", // YouTube
+            "com.ss.android.ugc.aweme",   // 抖音
+            "com.ss.android.ugc.aweme.lite", // 抖音极速版
+            "com.kuaishou.nebula",     // 快手
+            "com.kuaishou.nebula",     // 快手
+            "com.xunmeng.pinduoduo"    // 拼多多
         )
         
         // 强制黑名单（不可移除）- 游戏类
         val FORCE_BLACKLIST_GAME = setOf(
-            "com.tencent.tmgp", "com.netease", "com.miHoYo",
-            "com.tencent.ig", "com.tencent.tmgp.sgame",
-            "com.mojang.minecraftpe", "com.roblox.client"
+            "com.tencent.tmgp",                    // 腾讯游戏
+            "com.tencent.tmgp.sgame",              // 王者荣耀
+            "com.tencent.tmgp.smoba",              // 王者荣耀世界
+            "com.tencent.ig",                      // PUBG
+            "com.tencent.tmgp.pubgmhd",            // 和平精英
+            "com.miHoYo",                          // 米哈游
+            "com.miHoYo.GenshinImpact",            // 原神
+            "com.miHoYo.Yuanshen",                 // 原神
+            "com.miHoYo.hkrpg",                    // 崩坏：星穹铁道
+            "com.miHoYo.bh3",                      // 崩坏 3
+            "com.netease",                         // 网易游戏
+            "com.netease.onmyoji",                 // 阴阳师
+            "com.netease.mrzhna",                  // 明日之后
+            "com.tencent.tmgp.speedmobile",        // QQ 飞车
+            "com.tencent.tmgp.cod",                // 使命召唤
+            "com.tencent.jkchess",                 // 金铲铲之战
+            "com.tencent.tmgp.naruto",             // 火影忍者
+            "com.garena.game.freefire",            // Free Fire
+            "com.roblox.client",                   // Roblox
+            "com.mojang.minecraftpe",              // 我的世界
+            "com.ea.gp.fifamobile",                // FIFA
+            "com.riotgames.league.wildrift",       // 英雄联盟手游
+            "com.YoStarEN.Arknights",              // 明日方舟
+            "com.sunborn.girlsfrontline.en",       // 少女前线
+            "com.tencent.tmgp.和平精英",            // 和平精英
+            "com.gameloft.android.ANMP.GloftA8HM", // 狂野飙车
+            "com.netease.hyxd",                    // 荒野行动
+            "com.netease.dwrg",                    // 大话西游
+            "com.lilithgame.roc.gp",               // 万国觉醒
+            "com.supercell.clashofclans",          // 部落冲突
+            "com.supercell.brawlstars",            // 荒野乱斗
+            "com.activision.callofduty.shooter",   // COD 手游
+            "com.tencent.tmgp.dnf",                // DNF
+            "com.wanmei.zhuxian",                  // 诛仙
+            "com.tencent.tmgp.ak",                 // 天龙八部
+            "com.yoozoo.got.tunnelplay",           // 权力的游戏
+            "com.fenqile.fenqile",                 // 分期乐
+            "com.proximabeta.mzf",                 // 明日方舟
+            "com.nexon.bluearchive",               // 蔚蓝档案
+            "com.dts.freefireth",                  // Free Fire
+            "com.tencent.tmgp.cf"                  // 穿越火线
+        )
+        
+        // 强制黑名单（不可移除）- 社交/社区类
+        val FORCE_BLACKLIST_SOCIAL = setOf(
+            "com.tencent.mobileqq",      // QQ
+            "com.tencent.mm",            // 微信
+            "com.sina.weibo",            // 微博
+            "com.zhihu.android",         // 知乎
+            "com.xiaohongshu.android",   // 小红书
+            "com.douban.frodo",          // 豆瓣
+            "com.coolapk.market",        // 酷安
+            "com.tieba.baidu",           // 百度贴吧
+            "com.instagram.android",     // Instagram
+            "com.facebook.katana",       // Facebook
+            "com.twitter.android",       // Twitter
+            "com.snapchat.android",      // Snapchat
+            "com.discord",               // Discord
+            "com.reddit.frontpage",      // Reddit
+            "com.tencent.wework",        // 企业微信
+            "com.dingtalk.enterprise"    // 钉钉
+        )
+        
+        // 强制黑名单（不可移除）- 阅读/小说类
+        val FORCE_BLACKLIST_READ = setOf(
+            "com.qidian.QDReader",       // 起点读书
+            "com.fanqie.reader",         // 番茄小说
+            "com.mipush.push",           // 七猫小说
+            "com.qq.reader",             // QQ 阅读
+            "com.dangdang.reader",       // 当当阅读
+            "com.ireader.reader",        // iReader
+            "com.flyread.reader",        // 飞读小说
+            "com.jingdong.app.reader",   // 京东读书
+            "com.chaoxing.book",         // 超星学习通
+            "com.douban.book",           // 豆瓣读书
+            "com.douban.read"            // 豆瓣阅读
+        )
+        
+        // 强制黑名单（不可移除）- 浏览器类
+        val FORCE_BLACKLIST_BROWSER = setOf(
+            "com.android.chrome",        // Chrome 浏览器
+            "com.UCMobile",              // UC 浏览器
+            "com.UCMobile.intl",         // UC 浏览器国际版
+            "com.qq.browser",            // QQ 浏览器
+            "com.baidu.browser",         // 百度浏览器
+            "com.baidu.searchbox",       // 百度搜索
+            "com.miui.browser",          // MIUI 浏览器
+            "com.huawei.browser",        // 华为浏览器
+            "com.vivo.browser",          // vivo 浏览器
+            "com.oppo.browser",          // OPPO 浏览器
+            "com.oneplus.browser",       // 一加浏览器
+            "com.samsung.android.app.sbrowser", // Samsung 浏览器
+            "org.mozilla.firefox",       // Firefox
+            "com.microsoft.emmx",        // Microsoft Edge
+            "com.brave.browser",         // Brave
+            "com.opera.browser",         // Opera
+            "com.yandex.browser",        // Yandex
+            "com.cmcm.cmbrowser",        // 猎豹浏览器
+            "com.qihoo.browser",         // 360 浏览器
+            "com.android.browser"        // 安卓原生浏览器
+        )
+        
+        // 强制黑名单（不可移除）- 音乐类
+        val FORCE_BLACKLIST_MUSIC = setOf(
+            "com.netease.cloudmusic",    // 网易云音乐
+            "com.tencent.qqmusic",       // QQ 音乐
+            "com.kuwo.player",           // 酷我音乐
+            "com.kugou.android",         // 酷狗音乐
+            "com.baidu.music",           // 百度音乐
+            "fm.xiami.main",             // 虾米音乐
+            "com.douban.fm",             // 豆瓣 FM
+            "com.spotify.music",         // Spotify
+            "com.google.android.apps.youtube.music" // YouTube Music
         )
         
         // 关键词黑名单（不可移除）
         val FORCE_KEYWORDS = listOf(
-            "tmgp", "game", "gaming", "video", "movie", "aweme",
-            "douyin", "kuaishou", "bilibili", "youtube", "qqlive", "aiqiyi"
+            // 游戏类
+            "tmgp", "game", "gaming", "playgame", "mobilegame",
+            "miHoYo", "mihaoyou", "yuanshen", "genshin", "honkai",
+            "netease", "wangyigame", "tencentgame", "txgame",
+            // 视频类
+            "video", "movie", "tv", "film", "shortvideo", "shipin",
+            "aweme", "douyin", "kuaishou", "nebula",
+            "qqlive", "aiqiyi", "youku", "bilibili", "blbl",
+            "youtube", "youtubemusic",
+            // 社交类
+            "weibo", "social", "shejiao",
+            "xiaohongshu", "red", "xhs",
+            "zhihu", "douban", "coolapk",
+            "tieba", "baidutieba",
+            "instagram", "facebook", "twitter", "snapchat",
+            "tiktok", "douyin",
+            // 音乐类
+            "music", "yinyue", "wangyiyunyinyue", "qqmusic",
+            "kugou", "kuwo", "xiami",
+            // 阅读/小说类
+            "reader", "novel", "book", "yuedu", "xiaoshuo",
+            "qidian", "qqreader", "fanqie", "qimao",
+            // 浏览器类
+            "browser", "liulanqi", "chrome", "firefox", "opera",
+            "ucbrowser", "qqbrowser", "baidubrowser",
+            "edge", "safari", "samsungbrowser",
+            // 直播类
+            "live", "zhibo", "douyu", "huya", "huajiao", "inke",
+            "karaoke", "changba", "quanminkge"
         )
     }
     
@@ -233,6 +378,10 @@ class BlacklistManageActivity : Activity() {
     private fun isForceBlacklist(packageName: String): Boolean {
         return packageName in FORCE_BLACKLIST_VIDEO ||
                packageName in FORCE_BLACKLIST_GAME ||
+               packageName in FORCE_BLACKLIST_SOCIAL ||
+               packageName in FORCE_BLACKLIST_READ ||
+               packageName in FORCE_BLACKLIST_BROWSER ||
+               packageName in FORCE_BLACKLIST_MUSIC ||
                FORCE_BLACKLIST_GAME.any { packageName.startsWith(it) }
     }
     

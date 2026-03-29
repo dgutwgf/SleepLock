@@ -20,9 +20,10 @@ import com.sleeplock.data.entity.*
         UnlockCredit::class,
         ViolationLog::class,
         ExecutionLog::class,
-        AppBlacklistItem::class
+        AppBlacklistItem::class,
+        DailyLockStats::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -36,6 +37,7 @@ abstract class SleepLockDatabase : RoomDatabase() {
     abstract fun violationLogDao(): ViolationLogDao
     abstract fun executionLogDao(): ExecutionLogDao
     abstract fun appBlacklistDao(): AppBlacklistDao
+    abstract fun dailyLockStatsDao(): DailyLockStatsDao
     
     companion object {
         @Volatile

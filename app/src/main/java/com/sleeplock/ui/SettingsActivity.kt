@@ -16,6 +16,7 @@ import androidx.core.content.ContextCompat
 import com.sleeplock.data.SleepLockDatabase
 import com.sleeplock.data.entity.UserSettings
 import com.sleeplock.ui.settings.BlacklistManageActivity
+import com.sleeplock.ui.stats.LockStatsActivity
 import com.sleeplock.util.ReminderScheduler
 import com.sleeplock.util.SchedulerManager
 import kotlinx.coroutines.*
@@ -232,6 +233,34 @@ class SettingsActivity : Activity() {
         // 黑名单说明
         layout.addView(TextView(this).apply {
             text = "💡 管理黑名单应用，视频/游戏类为强制黑名单不可移除"
+            textSize = 12f
+            setTextColor(ContextCompat.getColor(this@SettingsActivity, android.R.color.darker_gray))
+            gravity = Gravity.CENTER
+            setPadding(0, 10, 0, 20)
+        })
+        
+        // 分隔线
+        layout.addView(createDivider())
+        
+        // 锁机统计按钮
+        val statsButton = Button(this).apply {
+            text = "📊 锁机统计"
+            textSize = 16f
+            setTextColor(ContextCompat.getColor(this@SettingsActivity, android.R.color.white))
+            setBackgroundColor(Color.parseColor("#2196F3"))
+            gravity = Gravity.CENTER
+            setPadding(30, 20, 30, 20)
+            elevation = 2f
+            setOnClickListener {
+                val intent = Intent(this@SettingsActivity, LockStatsActivity::class.java)
+                startActivity(intent)
+            }
+        }
+        layout.addView(statsButton, createFullWidthParams())
+        
+        // 统计说明
+        layout.addView(TextView(this).apply {
+            text = "💡 查看每日锁机时长、拦截次数等统计数据"
             textSize = 12f
             setTextColor(ContextCompat.getColor(this@SettingsActivity, android.R.color.darker_gray))
             gravity = Gravity.CENTER

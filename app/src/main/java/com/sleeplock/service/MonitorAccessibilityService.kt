@@ -178,7 +178,14 @@ class MonitorAccessibilityService : AccessibilityService() {
      * 定期检查当前应用
      */
     private suspend fun checkCurrentApp() {
-        if (currentPackageName.isNotEmpty() && !isIntercepting && isLockPeriod) {
+        // 检查屏幕状态，锁屏时暂停监控
+        val isScreenOn = withContext(Dispatchers.Main) {
+            val powerManager = getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
+            powerManager.isInteractive
+        }
+        
+        // 只在屏幕亮起时检查（锁屏时无法使用应用，无需监控）
+        if (isScreenOn && currentPackageName.isNotEmpty() && !isIntercepting && isLockPeriod) {
             checkAndInterceptInternal(currentPackageName)
         }
     }
