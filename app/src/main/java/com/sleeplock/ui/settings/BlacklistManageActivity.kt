@@ -161,38 +161,40 @@ class BlacklistManageActivity : Activity() {
             "com.google.android.apps.youtube.music" // YouTube Music
         )
         
-        // 关键词黑名单（不可移除）
+        // 关键词黑名单（不可移除）- 只匹配明确的娱乐应用
         val FORCE_KEYWORDS = listOf(
-            // 游戏类
-            "tmgp", "game", "gaming", "playgame", "mobilegame",
-            "miHoYo", "mihaoyou", "yuanshen", "genshin", "honkai",
-            "netease", "wangyigame", "tencentgame", "txgame",
-            // 视频类
-            "video", "movie", "tv", "film", "shortvideo", "shipin",
-            "aweme", "douyin", "kuaishou", "nebula",
-            "qqlive", "aiqiyi", "youku", "bilibili", "blbl",
-            "youtube", "youtubemusic",
-            // 社交娱乐类（排除办公）
-            "weibo", "shejiao",
-            "xiaohongshu", "red", "xhs",
-            "zhihu", "douban", "coolapk",
-            "tieba", "baidutieba",
-            "instagram", "facebook", "twitter", "snapchat",
-            "tiktok", "douyin",
-            // 音乐类
-            "music", "yinyue", "wangyiyunyinyue", "qqmusic",
-            "kugou", "kuwo", "xiami",
-            // 阅读/小说类
-            "reader", "novel", "book", "yuedu", "xiaoshuo",
-            "qidian", "qqreader", "fanqie", "qimao",
-            // 浏览器类
-            "browser", "liulanqi", "chrome", "firefox", "opera",
-            "ucbrowser", "qqbrowser", "baidubrowser",
-            "edge", "safari", "samsungbrowser",
-            // 直播类
-            "live", "zhibo", "douyu", "huya", "huajiao", "inke",
-            "karaoke", "changba", "quanminkge"
-            // 注意：排除 social（包含企业微信等办公应用）
+            // 游戏类（精确匹配）
+            "tmgp.sgame", "tmgp.ig", "tmgp.cod", "tmgp.dnf", "tmgp.naruto",  // 腾讯游戏
+            "tmgp.speedmobile", "tmgp.pubgmhd", "tmgp.cf", "tmgp.ak",  // 腾讯游戏
+            "miHoYo.Genshin", "miHoYo.Yuanshen", "miHoYo.hkrpg", "miHoYo.bh3",  // 米哈游
+            "netease.onmyoji", "netease.mrzh", "netease.hyxd", "netease.dwrg",  // 网易游戏
+            "minecraftpe", "roblox", "freefire", "fortnite",  // 国际游戏
+            "clashofclans", "brawlstars", "candycrush", "gardenscapes", "homescapes",  // Supercell
+            "fifamobile", "apexlegends", "wildrift",  // EA/ Riot
+            "arknights", "girlsfrontline", "bluearchive",  // 二次元
+            // 视频类（精确匹配）
+            "tencent.qqlive", "qiyi.video", "youku.phone", "baidu.video",  // 国内视频
+            "danmaku.bili", "youtube", "youtubemusic",  // B 站/YouTube
+            "ugc.aweme", "ugc.live", "kuaishou.nebula",  // 抖音快手
+            // 社交娱乐类（精确匹配）
+            "sina.weibo", "xiaohongshu", "zhihu.android", "douban.frodo",  // 社交
+            "coolapk.market", "tieba.baidu",  // 社区
+            "instagram", "facebook.katana", "twitter.android", "snapchat",  // 国际社交
+            "tiktok", "discord", "reddit.frontpage",  // 国际
+            // 音乐类（精确匹配）
+            "netease.cloudmusic", "tencent.qqmusic", "kuwo.player", "kugou.android",  // 国内音乐
+            "xiami", "douban.fm", "spotify.music",  // 国际
+            // 阅读/小说类（精确匹配）
+            "qidian.QDReader", "fanqie.reader", "mipush.push", "qq.reader",  // 小说
+            "dangdang.reader", "ireader.reader", "flyread.reader",  // 阅读
+            // 浏览器类（精确匹配）
+            "android.chrome", "UCMobile", "qq.browser", "baidu.browser",  // 浏览器
+            "miui.browser", "huawei.browser", "vivo.browser", "oppo.browser",  // 厂商浏览器
+            "mozilla.firefox", "microsoft.emmx", "brave.browser", "opera.browser",  // 国际
+            // 直播类（精确匹配）
+            "douyu.live", "huya.live", "huajiao", "inke",  // 直播平台
+            "tencent.karaoke", "changba"  // K 歌
+            // 注意：不再使用宽泛的关键词，避免误判
         )
     }
     

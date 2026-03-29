@@ -314,65 +314,31 @@ class MonitorAccessibilityService : AccessibilityService() {
             Log.e(TAG, "查询自定义黑名单失败", e)
         }
         
-        // 3. 关键词匹配（覆盖更多变体）
-        val blacklistKeywords = listOf(
+        // 3. 关键词匹配（只匹配明确的娱乐应用，避免误判）
+        // 注意：不再使用宽泛的关键词，只保留精确匹配
+        val preciseKeywords = listOf(
             // 游戏类
-            "tmgp", "game", "gaming", "playgame", "mobilegame",
-            "miHoYo", "mihaoyou", "yuanshen", "genshin", "honkai",
-            "netease", "wangyigame", "tencentgame", "txgame",
+            ".tmgp.sgame", ".tmgp.ig", ".tmgp.cod", ".tmgp.dnf",  // 腾讯游戏
+            ".miHoYo.Genshin", ".miHoYo.Yuanshen", ".miHoYo.hkrpg",  // 米哈游
+            ".netease.onmyoji", ".netease.mrzh",  // 网易游戏
+            ".minecraftpe", ".roblox", ".freefire",  // 国际游戏
             // 视频类
-            "video", "movie", "tv", "film", "shortvideo", "shipin",
-            "aweme", "douyin", "kuaishou", "nebula",
-            "qqlive", "aiqiyi", "youku", "bilibili", "blbl",
-            "youtube", "youtubemusic",
-            // 社交类
-            "weibo", "social", "shejiao",
-            "xiaohongshu", "red", "xhs",
-            "zhihu", "douban", "coolapk",
-            "tieba", "baidutieba",
-            "instagram", "facebook", "twitter", "snapchat",
-            "tiktok", "douyin",
+            ".qqlive", ".qiyi.video", ".youku.phone",  // 国内视频
+            ".danmaku.bili", ".youtube",  // B 站/YouTube
+            ".ugc.aweme", ".kuaishou",  // 抖音快手
+            // 社交娱乐
+            ".weibo", ".xiaohongshu", ".zhihu", ".douban",  // 社交
             // 音乐类
-            "music", "yinyue", "wangyiyunyinyue", "qqmusic",
-            "kugou", "kuwo", "xiami",
-            // 阅读/小说类
-            "reader", "novel", "book", "yuedu", "xiaoshuo",
-            "qidian", "qqreader", "fanqie", "qimao",
-            // 直播类
-            "live", "zhibo", "douyu", "huya", "huajiao", "inke",
-            "karaoke", "changba", "quanminkge",
-            // 购物类
-            "taobao", "jd", "jingdong", "pinduoduo", "pdd",
-            "vip", "weipinhui", "xianyu", "zhuanzhuan",
-            // 浏览器类
-            "browser", "liulanqi", "chrome", "firefox", "opera",
-            "ucbrowser", "qqbrowser", "baidubrowser",
-            "edge", "safari", "samsungbrowser",
-            // 新闻类
-            "news", "xinwen", "toutiao", "jinritoutiao",
-            "wangyixinwen", "tencentnews", "ifeng", "sohu",
-            // 图片/美颜类
-            "camera", "photo", "meiyang", "xiangji",
-            "meitu", "qingyan", "snow", "b612",
-            // 支付/理财（娱乐功能）
-            "alipay", "zhifubao", "wealth", "licai",
-            // 外卖/到店（娱乐性质）
-            "meituan", "eleme", "dianping",
-            // 旅游/出行（娱乐性质）
-            "travel", "lvxing", "ctrip", "qunar", "fliggy",
-            // 输入法（带娱乐功能）
-            "input", "shuru", "keyboard", "emoji",
-            // 社区/论坛
-            "community", "luntan", "shequ",
-            // 体育/彩票
-            "sport", "tiyu", "lottery", "caipiao",
-            // 其他娱乐
-            "entertainment", "yule", "fun", "play",
-            "anime", "comic", "manga", "dongman"
+            ".cloudmusic", ".qqmusic", ".kugou", ".kuwo",  // 音乐
+            // 浏览器
+            ".chrome", "UCMobile", ".qq.browser",  // 浏览器（排除系统）
+            // 直播
+            ".douyu", ".huya", ".huajiao", ".inke"  // 直播
         )
         
+        // 精确匹配：包名包含完整关键词
         val lowerPackageName = packageName.lowercase()
-        return blacklistKeywords.any { it in lowerPackageName }
+        return preciseKeywords.any { it in lowerPackageName }
     }
     
     /**
@@ -431,13 +397,7 @@ class MonitorAccessibilityService : AccessibilityService() {
         // 更新统计数据
         updateInterceptStats(packageName, appName)
         
-        // 方法 1: 0.3 秒后强制停止应用（清除后台）
-        mainHandler.postDelayed({
-            forceStopApp(packageName)
-            Log.d(TAG, "🛑 已强制停止应用：$packageName")
-        }, 300)
-        
-        // 方法 2: 立即启动拦截界面
+        // 方法 1: 立即启动拦截界面（确保先显示界面）
         mainHandler.post {
             try {
                 val intent = Intent(this@MonitorAccessibilityService, LockScreenActivity::class.java).apply {
@@ -458,25 +418,31 @@ class MonitorAccessibilityService : AccessibilityService() {
             }
         }
         
-        // 方法 3: 0.5 秒后模拟 Home 键（更快响应）
+        // 方法 2: 0.5 秒后强制停止应用（清除后台）
+        mainHandler.postDelayed({
+            forceStopApp(packageName)
+            Log.d(TAG, "🛑 已强制停止应用：$packageName")
+        }, 500)
+        
+        // 方法 3: 1 秒后模拟 Home 键（给用户看警告的时间）
         mainHandler.postDelayed({
             performGlobalAction(GLOBAL_ACTION_HOME)
             Log.d(TAG, "🏠 已返回桌面")
-        }, 500)
+        }, 1000)
         
-        // 方法 4: 1.5 秒后再次确保
+        // 方法 4: 2 秒后再次确保
         mainHandler.postDelayed({
             if (isLockPeriod) {
                 performGlobalAction(GLOBAL_ACTION_HOME)
                 Log.d(TAG, "🔒 二次确认返回桌面")
             }
-        }, 1500)
+        }, 2000)
         
-        // 方法 5: 3 秒后重置拦截状态
+        // 方法 5: 5 秒后重置拦截状态（确保警告显示至少 5 秒）
         mainHandler.postDelayed({
             isIntercepting = false
             Log.d(TAG, "🔄 拦截状态已重置")
-        }, 3000)
+        }, 5000)
         
         // 记录违规日志
         recordViolationLog(packageName, appName, reason)
