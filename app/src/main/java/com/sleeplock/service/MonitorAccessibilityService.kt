@@ -425,25 +425,25 @@ class MonitorAccessibilityService : AccessibilityService() {
             Log.d(TAG, "🛑 已强制停止应用：$packageName")
         }, 500)
         
-        // 方法 3: 1 秒后模拟 Home 键（给用户看警告的时间）
+        // 方法 3: 5 秒后模拟 Home 键（让用户看警告 5 秒）
         mainHandler.postDelayed({
             performGlobalAction(GLOBAL_ACTION_HOME)
             Log.d(TAG, "🏠 已返回桌面")
-        }, 1000)
+        }, 5000)
         
-        // 方法 4: 2 秒后再次确保
+        // 方法 4: 6 秒后再次确保
         mainHandler.postDelayed({
             if (isLockPeriod) {
                 performGlobalAction(GLOBAL_ACTION_HOME)
                 Log.d(TAG, "🔒 二次确认返回桌面")
             }
-        }, 2000)
+        }, 6000)
         
-        // 方法 5: 5 秒后重置拦截状态（确保警告显示至少 5 秒）
+        // 方法 5: 7 秒后重置拦截状态（确保警告显示至少 5 秒）
         mainHandler.postDelayed({
             isIntercepting = false
             Log.d(TAG, "🔄 拦截状态已重置")
-        }, 5000)
+        }, 7000)
         
         // 记录违规日志
         recordViolationLog(packageName, appName, reason)
