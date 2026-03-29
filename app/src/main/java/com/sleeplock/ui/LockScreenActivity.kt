@@ -56,26 +56,6 @@ class LockScreenActivity : Activity() {
         MANUAL_LOCK       // 手动锁定
     }
     
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        val mode = intent.getStringExtra("mode") ?: Mode.LOCK_PERIOD.name
-        interceptedPackageName = intent.getStringExtra("package_name") ?: ""
-        interceptReason = intent.getStringExtra("reason") ?: ""
-        
-        Log.d(TAG, "🔒 拦截界面启动 - 模式：$mode, 应用：$interceptedPackageName, 原因：$interceptReason")
-        
-        prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        
-        setupWindow()
-        setContentView(createUI(mode))
-        
-        // 开始倒计时
-        startCountdown()
-        
-        // 启动持续监控，防止应用绕过
-        startContinuousMonitor()
-    }
-    
     /**
      * 配置窗口属性
      */
@@ -237,7 +217,7 @@ class LockScreenActivity : Activity() {
     private fun startCountdown() {
         countdownRunnable = object : Runnable {
             override fun run() {
-                val elapsedSeconds = (System.currentTimeMillis() - interceptStartTime) / 1000
+                val elapsedSeconds = ((System.currentTimeMillis() - interceptStartTime) / 1000).toInt()
                 val displaySeconds = maxOf(5 - elapsedSeconds, 0)
                 remainingSeconds = displaySeconds
                 
@@ -299,7 +279,7 @@ class LockScreenActivity : Activity() {
         handler.postDelayed(object : Runnable {
             override fun run() {
                 if (!isFinishing) {
-                    val elapsedSeconds = (System.currentTimeMillis() - interceptStartTime) / 1000
+                    val elapsedSeconds = ((System.currentTimeMillis() - interceptStartTime) / 1000).toInt()
                     if (elapsedSeconds < 5) {
                         // 确保拦截界面始终在最上层（至少 5 秒）
                         window.decorView.systemUiVisibility = (

@@ -1,6 +1,7 @@
 package com.sleeplock.ui.settings
 
 import android.app.Activity
+import android.app.AlertDialog
 import android.content.Context
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
@@ -249,7 +250,7 @@ class BlacklistManageActivity : Activity() {
         
         val appNames = nonBlacklistedApps.map { "${it.appName} (${it.packageName})" }.toTypedArray()
         
-        builder.setItems(appNames) { _, which ->
+        builder.setItems(appNames) { dialog, which ->
             val selectedApp = nonBlacklistedApps[which]
             addToBlacklist(selectedApp.packageName, selectedApp.appName)
         }
@@ -394,7 +395,7 @@ class BlacklistManageActivity : Activity() {
         AlertDialog.Builder(this)
             .setTitle("移除黑名单")
             .setMessage("确定要从黑名单中移除 \"${app.appName}\" 吗？")
-            .setPositiveButton("移除") { _, _ ->
+            .setPositiveButton("移除") { dialog, which ->
                 removeFromBlacklist(app.packageName, app.appName, app.isForceBlacklist)
             }
             .setNegativeButton("取消", null)
