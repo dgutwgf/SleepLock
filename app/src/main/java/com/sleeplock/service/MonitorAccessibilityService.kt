@@ -90,9 +90,8 @@ class MonitorAccessibilityService : AccessibilityService() {
         "com.roblox.client",               // Roblox
         "com.garena.game.freefire",        // Free Fire
         
-        // 社交类
+        // 社交类（微信已移除，不再拦截）
         "com.tencent.mobileqq",            // QQ
-        "com.tencent.mm",                  // 微信
         "com.sina.weibo",                  // 微博
         "com.instagram.android",           // Instagram
         "com.facebook.katana",             // Facebook
