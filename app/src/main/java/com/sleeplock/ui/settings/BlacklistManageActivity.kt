@@ -94,7 +94,6 @@ class BlacklistManageActivity : Activity() {
         // 强制黑名单（不可移除）- 社交/社区类
         val FORCE_BLACKLIST_SOCIAL = setOf(
             "com.tencent.mobileqq",      // QQ
-            "com.tencent.mm",            // 微信
             "com.sina.weibo",            // 微博
             "com.zhihu.android",         // 知乎
             "com.xiaohongshu.android",   // 小红书
