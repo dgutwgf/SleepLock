@@ -292,7 +292,7 @@ class MainActivity : Activity() {
         
         // 版本信息
         val versionText = TextView(this).apply {
-            text = "版本 v0.2.0 | 目标设备：Redmi K70 Pro"
+            text = "版本 v0.2.4 | 目标设备：Redmi K70 Pro"
             textSize = 12f
             setTextColor(ContextCompat.getColor(this@MainActivity, android.R.color.darker_gray))
             gravity = Gravity.CENTER
@@ -446,16 +446,28 @@ class MainActivity : Activity() {
                     stopButton.alpha = 1.0f
                 }
                 
-                // 2分钟后自动停止测试模式
-                withContext(Dispatchers.IO) {
-                    delay(2 * 60 * 1000)
-                }
+                // 2 分钟后自动停止测试模式
+                delay(2 * 60 * 1000)
+                
+                // 真正清除测试模式标志
+                getSharedPreferences("SleepLock", Context.MODE_PRIVATE)
+                    .edit()
+                    .putBoolean("is_lock_active", false)
+                    .putBoolean("test_mode", false)
+                    .apply()
                 
                 withContext(Dispatchers.Main) {
                     if (isLockServiceRunning) {
-                        Toast.makeText(this@MainActivity, "2分钟测试结束", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(this@MainActivity, "2 分钟测试结束，已自动停止锁机", Toast.LENGTH_SHORT).show()
+                        isLockServiceRunning = false
+                        updateStatusText("✅ 锁机服务已停止", ContextCompat.getColor(this@MainActivity, android.R.color.holo_blue_dark))
+                        startButton.isEnabled = true
+                        startButton.alpha = 1.0f
+                        stopButton.isEnabled = false
+                        stopButton.alpha = 0.5f
                     }
                 }
+                
                 
                 Log.d(TAG, "锁机服务已启动")
             } catch (e: Exception) {

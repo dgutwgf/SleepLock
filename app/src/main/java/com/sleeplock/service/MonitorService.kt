@@ -163,10 +163,17 @@ class MonitorService : Service() {
                 
                 // 处理跨夜情况
                 val isInTimePeriod = if (lockMinutes > unlockMinutes) {
+                    // 跨夜：23:40 ~ 04:00，即 currentMinutes >= 1420 || currentMinutes < 240
                     currentMinutes >= lockMinutes || currentMinutes < unlockMinutes
                 } else {
+                    // 不跨夜：lockMinutes <= currentMinutes < unlockMinutes
                     currentMinutes >= lockMinutes && currentMinutes < unlockMinutes
                 }
+                
+                // 调试日志：输出详细的时间计算
+                Log.v(TAG, "⏰ 时间检查：当前=$currentMinutes (${currentTime.get(Calendar.HOUR_OF_DAY)}:${currentTime.get(Calendar.MINUTE)}), " +
+                    "锁机=$lockMinutes-${unlockMinutes} (${lockTime.first}:${lockTime.second}-${unlockTime.first}:${unlockTime.second}), " +
+                    "在时段内=$isInTimePeriod")
                 
                 // 检查是否是测试模式
                 val testMode = prefs.getBoolean("test_mode", false)
@@ -178,6 +185,24 @@ class MonitorService : Service() {
                     true  // 测试模式下始终锁定
                 } else {
                     isInTimePeriod && isLockActive
+                }
+                
+                // 关键修复：如果不在锁机时段但 isLockActive 仍为 true，自动停止锁机服务
+                // 这确保即使定时解锁任务失败，也能在解锁时段自动停止拦截
+                if (!isInTimePeriod && isLockActive && !testMode) {
+                    Log.w(TAG, "⚠️ 检测到不在锁机时段但服务仍激活，自动停止锁机服务")
+                    LogManager.e(ExecutionLog.LogCategory.SCHEDULER, "PeriodicUpdate", 
+                        "⚠️ 自动停止锁机服务：当前时间不在锁机时段内")
+                    
+                    // 自动关闭锁机服务
+                    prefs.edit().putBoolean(KEY_LOCK_ACTIVE, false).apply()
+                    
+                    // 停止前台服务
+                    stopForeground(STOP_FOREGROUND_REMOVE)
+                    stopSelf()
+                    
+                    Log.d(TAG, "✅ 已自动停止锁机服务")
+                    return@launch
                 }
                 
                 // 更新无障碍服务状态

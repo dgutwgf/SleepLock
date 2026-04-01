@@ -42,6 +42,15 @@ class LockReceiver : BroadcastReceiver() {
             return
         }
         
+        // 关键修复：设置锁机激活标志，让无障碍服务进入拦截工作状态
+        val prefs = context.getSharedPreferences("SleepLock", Context.MODE_PRIVATE)
+        prefs.edit()
+            .putBoolean("is_lock_active", true)
+            .putBoolean("test_mode", false)  // 定时锁屏不是测试模式
+            .putLong("lock_start_time", System.currentTimeMillis())
+            .apply()
+        Log.d(TAG, "✅ 已设置 is_lock_active = true，进入拦截工作状态")
+        
         // 锁定屏幕
         val success = LockService.lockScreen(context)
         if (success) {
@@ -73,6 +82,15 @@ class LockReceiver : BroadcastReceiver() {
      */
     private fun handleUnlock(context: Context) {
         Log.d(TAG, "执行解锁")
+        
+        // 清除锁机标志
+        val prefs = context.getSharedPreferences("SleepLock", Context.MODE_PRIVATE)
+        prefs.edit()
+            .putBoolean("is_lock_active", false)
+            .putBoolean("test_mode", false)
+            .apply()
+        
+        Log.d(TAG, "✅ 已清除 is_lock_active 和 test_mode 标志")
         
         // 停止监控服务
         val monitorIntent = Intent(context, MonitorService::class.java)

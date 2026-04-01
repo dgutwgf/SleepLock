@@ -152,6 +152,7 @@ class MonitorAccessibilityService : AccessibilityService() {
     private fun startPeriodicCheck() {
         serviceScope.launch {
             var checkCount = 0
+            var lastLogTime = 0L
             while (isActive) {
                 delay(10000) // 每 10 秒检查一次
                 checkCount++
@@ -159,13 +160,23 @@ class MonitorAccessibilityService : AccessibilityService() {
                 // 每次检查前都更新锁机时段（确保状态同步）
                 updateLockPeriod()
                 
-                // 每次检查都输出日志（10 秒一次，频率较低）
-                val prefs = getSharedPreferences("SleepLock", Context.MODE_PRIVATE)
-                val isLockActive = prefs.getBoolean("is_lock_active", false)
-                val testMode = prefs.getBoolean("test_mode", false)
-                Log.d(TAG, "📊 定时监控检查 #${checkCount} - 锁机=$isLockPeriod, 激活=$isLockActive, 测试=$testMode")
-                LogManager.d(ExecutionLog.LogCategory.SERVICE, "PeriodicCheck", 
-                    "📊 定时监控检查 #${checkCount} - 锁机=$isLockPeriod, 激活=$isLockActive, 测试=$testMode")
+                // 只在屏幕亮起时输出日志（息屏时不输出，避免误以为在工作）
+                val isScreenOn = withContext(Dispatchers.Main) {
+                    val powerManager = getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
+                    powerManager.isInteractive
+                }
+                
+                // 只在屏幕亮起时输出日志（最多每分钟一次）
+                val now = System.currentTimeMillis()
+                if (isScreenOn && now - lastLogTime > 60000) {
+                    val prefs = getSharedPreferences("SleepLock", Context.MODE_PRIVATE)
+                    val isLockActive = prefs.getBoolean("is_lock_active", false)
+                    val testMode = prefs.getBoolean("test_mode", false)
+                    Log.d(TAG, "📊 定时监控检查 #${checkCount} - 锁机=$isLockPeriod, 激活=$isLockActive, 测试=$testMode")
+                    LogManager.d(ExecutionLog.LogCategory.SERVICE, "PeriodicCheck", 
+                        "📊 定时监控检查 #${checkCount} - 锁机=$isLockPeriod, 激活=$isLockActive, 测试=$testMode")
+                    lastLogTime = now
+                }
                 
                 // 只要当前有应用就检查（不依赖 isLockPeriod，因为 updateLockPeriod 已更新它）
                 checkCurrentApp()
@@ -565,10 +576,17 @@ class MonitorAccessibilityService : AccessibilityService() {
             
             // 处理跨夜情况
             val isInTimePeriod = if (lockMinutes > unlockMinutes) {
+                // 跨夜：23:40 ~ 04:00，即 currentMinutes >= 1420 || currentMinutes < 240
                 currentMinutes >= lockMinutes || currentMinutes < unlockMinutes
             } else {
+                // 不跨夜：lockMinutes <= currentMinutes < unlockMinutes
                 currentMinutes >= lockMinutes && currentMinutes < unlockMinutes
             }
+            
+            // 调试日志：输出详细的时间计算
+            Log.v(TAG, "⏰ 时间检查：当前=$currentMinutes (${currentTime.get(Calendar.HOUR_OF_DAY)}:${currentTime.get(Calendar.MINUTE)}), " +
+                "锁机=$lockMinutes-${unlockMinutes} (${lockTime.first}:${lockTime.second}-${unlockTime.first}:${unlockTime.second}), " +
+                "在时段内=$isInTimePeriod")
             
             // 检查 is_lock_active 标志（用户是否启动了锁机服务）
             val prefs = getSharedPreferences("SleepLock", Context.MODE_PRIVATE)
@@ -581,6 +599,26 @@ class MonitorAccessibilityService : AccessibilityService() {
                 true  // 测试模式下始终锁定
             } else {
                 isInTimePeriod && isLockActive
+            }
+            
+            // 关键修复：如果不在锁机时段但 isLockActive 仍为 true，自动清除标志
+            // 这确保即使定时解锁广播未触发，也能在解锁时段自动停止拦截
+            if (!isInTimePeriod && isLockActive && !testMode) {
+                Log.w(TAG, "⚠️ 检测到不在锁机时段但 is_lock_active 仍为 true，自动清除标志")
+                prefs.edit()
+                    .putBoolean("is_lock_active", false)
+                    .putBoolean("test_mode", false)
+                    .apply()
+                
+                LogManager.e(ExecutionLog.LogCategory.SCHEDULER, "AutoUnlock", 
+                    "⚠️ 自动清除锁机标志：当前时间不在锁机时段内")
+                
+                // 停止拦截
+                isLockPeriod = false
+                val logMsg = "🔓 自动解锁：已清除 is_lock_active (时间=$isInTimePeriod, 测试=$testMode)"
+                Log.d(TAG, logMsg)
+                LogManager.d(ExecutionLog.LogCategory.SERVICE, "LockPeriod", logMsg)
+                return
             }
             
             if (shouldBeLocked != isLockPeriod) {
