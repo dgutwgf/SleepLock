@@ -187,23 +187,9 @@ class MonitorService : Service() {
                     isInTimePeriod && isLockActive
                 }
                 
-                // 关键修复：如果不在锁机时段但 isLockActive 仍为 true，自动停止锁机服务
-                // 这确保即使定时解锁任务失败，也能在解锁时段自动停止拦截
-                if (!isInTimePeriod && isLockActive && !testMode) {
-                    Log.w(TAG, "⚠️ 检测到不在锁机时段但服务仍激活，自动停止锁机服务")
-                    LogManager.e(ExecutionLog.LogCategory.SCHEDULER, "PeriodicUpdate", 
-                        "⚠️ 自动停止锁机服务：当前时间不在锁机时段内")
-                    
-                    // 自动关闭锁机服务
-                    prefs.edit().putBoolean(KEY_LOCK_ACTIVE, false).apply()
-                    
-                    // 停止前台服务
-                    stopForeground(STOP_FOREGROUND_REMOVE)
-                    stopSelf()
-                    
-                    Log.d(TAG, "✅ 已自动停止锁机服务")
-                    return@launch
-                }
+                // 注意：MonitorService 不应该自己决定停止自己
+                // 停止锁机服务应该由外部触发（定时解锁广播或用户手动操作）
+                // 这里只负责通知无障碍服务更新状态
                 
                 // 更新无障碍服务状态
                 mainHandler.post {

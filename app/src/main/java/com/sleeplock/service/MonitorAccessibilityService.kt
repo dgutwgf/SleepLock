@@ -601,25 +601,9 @@ class MonitorAccessibilityService : AccessibilityService() {
                 isInTimePeriod && isLockActive
             }
             
-            // 关键修复：如果不在锁机时段但 isLockActive 仍为 true，自动清除标志
-            // 这确保即使定时解锁广播未触发，也能在解锁时段自动停止拦截
-            if (!isInTimePeriod && isLockActive && !testMode) {
-                Log.w(TAG, "⚠️ 检测到不在锁机时段但 is_lock_active 仍为 true，自动清除标志")
-                prefs.edit()
-                    .putBoolean("is_lock_active", false)
-                    .putBoolean("test_mode", false)
-                    .apply()
-                
-                LogManager.e(ExecutionLog.LogCategory.SCHEDULER, "AutoUnlock", 
-                    "⚠️ 自动清除锁机标志：当前时间不在锁机时段内")
-                
-                // 停止拦截
-                isLockPeriod = false
-                val logMsg = "🔓 自动解锁：已清除 is_lock_active (时间=$isInTimePeriod, 测试=$testMode)"
-                Log.d(TAG, logMsg)
-                LogManager.d(ExecutionLog.LogCategory.SERVICE, "LockPeriod", logMsg)
-                return
-            }
+            // 注意：无障碍服务不应该自己清除标志
+            // 标志只能由外部操作清除（定时广播或用户手动）
+            // 这里只根据当前标志和时间段计算是否应该拦截
             
             if (shouldBeLocked != isLockPeriod) {
                 isLockPeriod = shouldBeLocked

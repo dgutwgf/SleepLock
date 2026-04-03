@@ -17,6 +17,8 @@ import com.sleeplock.R
 import com.sleeplock.data.SleepLockDatabase
 import com.sleeplock.data.entity.UserSettings
 import com.sleeplock.service.LockService
+import com.sleeplock.service.MonitorService
+import com.sleeplock.service.MonitorAccessibilityService
 import com.sleeplock.util.SchedulerManager
 import kotlinx.coroutines.runBlocking
 import java.util.Calendar
@@ -636,10 +638,9 @@ class MainActivity : Activity() {
             return
         }
         
+        // 取消定时任务
         val schedulerManager = SchedulerManager(this)
         schedulerManager.cancelAllTasks()
-        
-        isLockServiceRunning = false
         
         // 清除保存的状态
         getSharedPreferences("SleepLock", Context.MODE_PRIVATE)
@@ -648,6 +649,20 @@ class MainActivity : Activity() {
             .putBoolean("test_mode", false)
             .putLong("lock_start_time", 0)
             .apply()
+        
+        // 停止 MonitorService（前台服务）- 关键修复：与定时解锁保持一致
+        try {
+            val monitorIntent = Intent(this, MonitorService::class.java)
+            stopService(monitorIntent)
+            Log.d(TAG, "✅ 已停止 MonitorService")
+        } catch (e: Exception) {
+            Log.w(TAG, "⚠️ 停止 MonitorService 失败：${e.message}")
+        }
+        
+        // 通知无障碍服务停止拦截
+        MonitorAccessibilityService.getInstance()?.setLockPeriod(false)
+        
+        isLockServiceRunning = false
         
         updateStatusText("✅ 锁机服务已停止", ContextCompat.getColor(this, android.R.color.holo_blue_dark))
         startButton.isEnabled = true
