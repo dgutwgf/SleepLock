@@ -578,6 +578,32 @@ class MainActivity : Activity() {
         startButton.alpha = 0.5f
         stopButton.isEnabled = true
         stopButton.alpha = 1.0f
+        
+        // 2 分钟后自动停止测试模式（关键修复：必须清除 test_mode，否则会永久忽略时间段检查）
+        ioScope.launch {
+            delay(2 * 60 * 1000)
+            
+            // 真正清除测试模式标志
+            getSharedPreferences("SleepLock", Context.MODE_PRIVATE)
+                .edit()
+                .putBoolean("is_lock_active", false)
+                .putBoolean("test_mode", false)
+                .apply()
+            
+            withContext(Dispatchers.Main) {
+                if (isLockServiceRunning) {
+                    Toast.makeText(this@MainActivity, "2 分钟测试结束，已自动停止锁机", Toast.LENGTH_SHORT).show()
+                    isLockServiceRunning = false
+                    updateStatusText("✅ 锁机服务已停止", ContextCompat.getColor(this@MainActivity, android.R.color.holo_blue_dark))
+                    startButton.isEnabled = true
+                    startButton.alpha = 1.0f
+                    stopButton.isEnabled = false
+                    stopButton.alpha = 0.5f
+                }
+            }
+            
+            Log.d(TAG, "测试锁屏：2 分钟测试结束，已清除 test_mode 标志")
+        }
     }
     
     /**
